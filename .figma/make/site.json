@@ -1,0 +1,10 @@
+{
+  "description": "Streamline network management for Bulacan State University with a comprehensive monitoring and alerting system, enabling efficient remote remediation for administrators.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
