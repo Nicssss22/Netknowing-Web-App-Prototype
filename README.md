@@ -4,31 +4,39 @@ A React and Vite front-end prototype for the Netknowing network monitoring syste
 
 ## Requirements
 
-- Node.js with Corepack available
-- Windows PowerShell
+- [Node.js](https://nodejs.org/) 20.19+ or 22.12+
+- Corepack available in your terminal
+
+The setup commands below work in PowerShell, Command Prompt, macOS, and Linux terminals.
 
 ## Run locally
 
-Open PowerShell in the project folder and install the dependencies:
+Clone the repository, replacing `<repository-url>` with the repository's Git URL:
 
-```powershell
-cd "C:\Users\agsti\Downloads\Netknowing Web App Prototype"
+```sh
+git clone https://github.com/Nicssss22/Netknowing-Web-App-Prototype.git
+cd <repository-folder>
+```
+
+Run the following commands from the cloned project folder (the folder containing `package.json`) to install dependencies:
+
+```sh
 corepack pnpm install
 ```
 
-Start the Vite development server:
+Start the development server:
 
-```powershell
+```sh
 corepack pnpm dev
 ```
 
-Open the local URL printed in the terminal (typically `http://localhost:5173/`). Keep the terminal open while using the app. Press `Ctrl+C` in the terminal to stop the server.
+Open the local URL printed in the terminal (typically `http://localhost:5173/`). Keep the terminal open while using the app. Press `Ctrl+C` to stop the server.
 
-If Corepack is not enabled, run `corepack enable` from an elevated PowerShell window, then retry the commands above.
+If Corepack is not available, follow the [Corepack installation instructions](https://github.com/nodejs/corepack#installation) for your platform, then retry the commands above.
 
 ## Other commands
 
-```powershell
+```sh
 corepack pnpm build
 corepack pnpm preview
 corepack pnpm format
