@@ -13,7 +13,9 @@
   <rect width="512" height="512" rx="16" fill="#a82d28"/>
   <g filter="url(#shadow)" fill="none" stroke="url(#gold)" stroke-width="34" stroke-linecap="square" stroke-linejoin="miter">
     <path d="M88 440V72h86l106 128"/>
-    <path d="M222 318l147 146h55V72h-86"/>
+    <path d="M222 318l147 146h55V72"/>
+    <path d="M88 440h86"/>
+    <path d="M338 72h86"/>
   </g>
   <g fill="none" stroke="#d98d22" stroke-width="12" stroke-linecap="round" stroke-linejoin="round">
     <path d="M143 187v177"/>
