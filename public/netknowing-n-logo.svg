@@ -12,9 +12,8 @@
   </defs>
   <rect width="512" height="512" rx="16" fill="#a82d28"/>
   <g filter="url(#shadow)" fill="none" stroke="url(#gold)" stroke-width="34" stroke-linecap="square" stroke-linejoin="miter">
-    <path d="M88 440V72h86L424 440V72"/>
-    <path d="M88 440h86"/>
-    <path d="M338 72h86"/>
+    <path d="M88 440V72h86l106 128"/>
+    <path d="M222 318l147 146h55V72h-86"/>
   </g>
   <g fill="none" stroke="#d98d22" stroke-width="12" stroke-linecap="round" stroke-linejoin="round">
     <path d="M143 187v177"/>
@@ -26,6 +25,8 @@
     <circle cx="143" cy="364" r="25"/>
     <circle cx="350" cy="143" r="25"/>
   </g>
+  <path d="M192 252l18 23-18 20z" fill="#f4ae3e"/>
+  <path d="M299 229l21-17 2 37z" fill="#f4ae3e"/>
   <path d="M269 270l86 82" fill="none" stroke="#f5f4f1" stroke-width="12" stroke-linecap="round"/>
   <circle cx="355" cy="352" r="25" fill="#f5f4f1"/>
   <path d="M201 267l25 26" fill="none" stroke="#ffd477" stroke-width="12" stroke-linecap="round"/>
