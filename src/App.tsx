@@ -102,7 +102,7 @@ function Avatar({ name }: { name: string }) {
 }
 
 function LogoImage({ decorative = false }: { decorative?: boolean }) {
-  return <img src="public/netknowing-n-logo.svg" alt={decorative ? "" : "Netknowing logo"} />;
+  return <img src={`${import.meta.env.BASE_URL}netknowing-n-logo.svg`} alt={decorative ? "" : "Netknowing logo"} />;
 }
 
 function Button({ children, variant = "primary", icon, onClick, disabled, visuallyDisabled, type = "button" }: {
