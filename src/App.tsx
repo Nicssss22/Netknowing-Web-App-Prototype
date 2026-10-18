@@ -1,4 +1,4 @@
-import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 type Role = "Admin" | "Staff" | "Director" | "Helpdesk" | "Auditor" | "Intern";
 type Screen =
@@ -133,6 +133,103 @@ const incidents = [
   { name: "CICT-LAB3-SW-02", location: "Laboratory 3 · 2F", time: "07:30 AM", status: "Early warning", kind: "ai" as const, detail: "Latency drifting above baseline" },
 ];
 
+type DeviceStatus = "Up" | "Degraded" | "Down";
+type Overrides = Record<string, Partial<DeviceRecord>>;
+
+const FAC_AP = "CICT-FAC-AP-03";
+const baseCounts: Record<DeviceStatus, number> = { Up: 41, Degraded: 5, Down: 2 };
+
+type DeviceProfile = {
+  model: string; summary: string; incident?: string; impact: string; connected: string; lastResponse: string;
+  recovers: boolean; rebootAt: string; checkAt: string;
+};
+
+// Sample reboot outcomes: CICT-LAB2-SW-01 stays unreachable after a reboot, every other device recovers.
+const deviceProfiles: Record<string, Partial<DeviceProfile>> = {
+  "CICT-LAB2-SW-01": { model: "Cisco Catalyst 2960-X", summary: "Cisco Catalyst 2960-X · Access switch", incident: "INC-2026-0418", impact: "CICT-LAB2-AP-04 and about 25 clients in Laboratory 2", connected: "CICT-LAB2-AP-04 · 25 clients", lastResponse: "36 minutes ago", recovers: false, rebootAt: "09:04:18", checkAt: "09:06" },
+  "CICT-FAC-AP-03": { model: "Ubiquiti UniFi 6 Pro", summary: "Ubiquiti UniFi 6 Pro · Wireless access point", incident: "INC-2026-0417", impact: "about 18 wireless clients in the Faculty Room", connected: "18 wireless clients", lastResponse: "8 minutes ago", recovers: true, rebootAt: "09:21:07", checkAt: "09:23" },
+};
+const defaultModels: Record<string, string> = { Router: "Cisco ISR 4331", Switch: "Cisco Catalyst 2960-X", "Access point": "Ubiquiti UniFi 6 Pro", Server: "Dell PowerEdge R250" };
+
+function profileFor(device: DeviceRecord): DeviceProfile {
+  const base = deviceProfiles[device.name] ?? {};
+  const model = base.model ?? defaultModels[device.type] ?? "Sample model";
+  return {
+    model, summary: base.summary ?? `${model} · ${device.type}`, incident: base.incident,
+    impact: base.impact ?? `devices connected to ${device.name}`, connected: base.connected ?? "Not recorded in sample data",
+    lastResponse: base.lastResponse ?? "Recently", recovers: base.recovers ?? true, rebootAt: base.rebootAt ?? "09:21:07", checkAt: base.checkAt ?? "09:23",
+  };
+}
+
+const findDevice = (name: string, overrides: Overrides): DeviceRecord => ({ ...(sampleDevices.find((d) => d.name === name) ?? sampleDevices[2]), ...overrides[name] });
+
+function summaryCounts(overrides: Overrides) {
+  const counts = { ...baseCounts };
+  for (const [name, patch] of Object.entries(overrides)) {
+    const base = sampleDevices.find((d) => d.name === name);
+    if (base && patch.status && patch.status !== base.status) { counts[base.status]--; counts[patch.status]++; }
+  }
+  return counts;
+}
+
+const liveIncidents = (overrides: Overrides, aiOn: boolean) => incidents.filter((item) => overrides[item.name]?.status !== "Up" && (aiOn || item.kind !== "ai"));
+
+const formatClock = (seconds: number) => `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+const escalationSentence = (seconds: number) => seconds > 0 ? `Secondary contact escalation in ${formatClock(seconds)}` : "Escalated to Paolo Cruz (secondary contact)";
+
+function useAlertTone(active: boolean) {
+  const contextRef = useRef<AudioContext | null>(null);
+  useEffect(() => {
+    if (!active) return;
+    const AudioCtor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioCtor) return;
+    const context = contextRef.current ?? (contextRef.current = new AudioCtor());
+    const unlock = () => { if (context.state === "suspended") void context.resume(); };
+    const beep = () => {
+      if (context.state !== "running") return;
+      [880, 660].forEach((frequency, index) => {
+        const start = context.currentTime + index * 0.24;
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+        oscillator.type = "sine";
+        oscillator.frequency.value = frequency;
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(0.16, start + 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.22);
+        oscillator.connect(gain).connect(context.destination);
+        oscillator.start(start);
+        oscillator.stop(start + 0.24);
+      });
+    };
+    unlock();
+    beep();
+    const timer = window.setInterval(beep, 3000);
+    window.addEventListener("pointerdown", unlock);
+    return () => { window.clearInterval(timer); window.removeEventListener("pointerdown", unlock); };
+  }, [active]);
+}
+
+function AlertBanner({ role, escalation, audible, onToggleSound, onAcknowledge, onOpen }: {
+  role: Role; escalation: number; audible: boolean; onToggleSound: () => void; onAcknowledge: () => void; onOpen: () => void;
+}) {
+  const incident = incidents.find((item) => item.name === FAC_AP)!;
+  return <div className="alert-banner" role="alert" aria-live="assertive">
+    <span className="alert-banner-icon"><Icon name="bell" size={20}/></span>
+    <div className="alert-banner-main">
+      <strong>Critical alert · {incident.name} is down</strong>
+      <span>{incident.location} · {incident.detail} · Detected {incident.time} · Email sent to Maria Santos</span>
+    </div>
+    <div className="alert-banner-meta"><Icon name="clock" size={15}/><span>{escalationSentence(escalation)}</span></div>
+    <button className={`alert-sound ${audible ? "on" : ""}`} onClick={onToggleSound} aria-pressed={audible} aria-label={`Audible alert ${audible ? "on" : "muted"}`}>
+      <span className="sound-bars" aria-hidden="true"><i/><i/><i/></span>{audible ? "Audible alert on" : "Audible alert muted"}
+    </button>
+    <div className="alert-banner-actions">
+      {role !== "Auditor" && <Button variant="secondary" icon="arrow" onClick={onOpen}>View incident</Button>}
+      {role === "Admin" ? <Button icon="check" onClick={onAcknowledge}>Acknowledge</Button> : <Status type="neutral">Awaiting administrator acknowledgement</Status>}
+    </div>
+  </div>;
+}
+
 function Login({ role, setRole, onLogin }: { role: Role; setRole: (r: Role) => void; onLogin: () => void }) {
   const [forgot, setForgot] = useState(false);
   const privileged = role === "Admin" || role === "Auditor";
@@ -167,13 +264,13 @@ function Login({ role, setRole, onLogin }: { role: Role; setRole: (r: Role) => v
   </main>;
 }
 
-function AppShell({ role, setRole, screen, setScreen, dark, setDark, aiOn, children, onLogout }: {
+function AppShell({ role, setRole, screen, setScreen, dark, setDark, aiOn, attention, audible, setAudible, banner, openDevice, children, onLogout }: {
   role: Role; setRole: (r: Role) => void; screen: Screen; setScreen: (s: Screen) => void;
-  dark: boolean; setDark: (v: boolean) => void; aiOn: boolean; children: ReactNode; onLogout: () => void;
+  dark: boolean; setDark: (v: boolean) => void; aiOn: boolean; attention: number; audible: boolean; setAudible: (v: boolean) => void;
+  banner?: ReactNode; openDevice: (name: string) => void; children: ReactNode; onLogout: () => void;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [roleOpen, setRoleOpen] = useState(false);
-  const [audible, setAudible] = useState(true);
   const [search, setSearch] = useState("");
   const available = navItems.filter((n) => permissions[role].includes(n.screen));
   const changeRole = (newRole: Role) => {
@@ -186,7 +283,7 @@ function AppShell({ role, setRole, screen, setScreen, dark, setDark, aiOn, child
       <div className="campus-context"><Icon name="pin" size={15}/><div><strong>CICT Main Campus</strong><small>Bulacan State University</small></div></div>
       <nav>
         <span className="nav-label">Workspace</span>
-        {available.map((item) => <button key={item.screen} className={screen === item.screen ? "nav-active" : ""} onClick={() => { setScreen(item.screen); setMobileOpen(false); }}><Icon name={item.icon}/><span>{item.label}</span>{item.screen === "dashboard" && <b className="nav-count">4</b>}{item.screen === "insights" && aiOn && <b className="nav-count purple">1</b>}</button>)}
+        {available.map((item) => <button key={item.screen} className={screen === item.screen ? "nav-active" : ""} onClick={() => { setScreen(item.screen); setMobileOpen(false); }}><Icon name={item.icon}/><span>{item.label}</span>{item.screen === "dashboard" && attention > 0 && <b className="nav-count">{attention}</b>}{item.screen === "insights" && aiOn && <b className="nav-count purple">1</b>}</button>)}
       </nav>
       <div className="sidebar-foot">
         <div className="system-health"><span className="pulse"/><div><strong>Sample monitoring view</strong><small>No live polling configured</small></div></div>
@@ -201,7 +298,7 @@ function AppShell({ role, setRole, screen, setScreen, dark, setDark, aiOn, child
         <div className="brand-mark brand-mark-image"><LogoImage decorative /></div>
         <strong>Netknowing</strong>
       </div>
-      <div className="global-search"><Icon name="search"/><input value={search} onChange={(event) => setSearch(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && search.trim()) { const target: Screen = /CICT-|10\.20\./i.test(search) ? "device" : "history"; setScreen(permissions[role].includes(target) ? target : "history"); setSearch(""); } }} placeholder="Search devices, incidents, locations…"/><kbd>Enter</kbd></div>
+      <div className="global-search"><Icon name="search"/><input value={search} onChange={(event) => setSearch(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && search.trim()) { const query = search.trim().toLowerCase(); const match = sampleDevices.find((d) => `${d.name} ${d.ip}`.toLowerCase().includes(query)); if (match && permissions[role].includes("device")) openDevice(match.name); else setScreen(permissions[role].includes("history") ? "history" : permissions[role].includes("devices") ? "devices" : screen); setSearch(""); } }} placeholder="Search devices, incidents, locations…"/><kbd>Enter</kbd></div>
         <div className="top-actions">
           <button className={`icon-btn ${audible ? "audible" : ""}`} aria-label={`Audible alerts ${audible ? "on" : "off"}`} aria-pressed={audible} onClick={() => setAudible(!audible)}><Icon name="volume" size={17}/>{audible && <span/>}</button>
           <button className="icon-btn" aria-label="Open active incident" onClick={() => permissions[role].includes("incident") && setScreen("incident")}><Icon name="bell"/><b>3</b></button>
@@ -211,6 +308,7 @@ function AppShell({ role, setRole, screen, setScreen, dark, setDark, aiOn, child
           </div>
         </div>
       </header>
+      {banner}
       <main className="content">{children}</main>
       <footer>Netknowing · CICT Main Campus <span>Prototype · Sample data only · No live device actions</span></footer>
     </div>
@@ -232,23 +330,31 @@ const nodes = [
   { name: "CICT-LAB3-AP-06", kind: "wifi" as const, status: "degraded", x: 89, y: 78, label: "Lab 3 AP" },
 ];
 
-function Dashboard({ role, go, openIncident }: { role: Role; go: (s: Screen) => void; openIncident: (name: string) => void }) {
+function Dashboard({ role, go, openIncident, openDevice, overrides, aiOn, acked, escalation }: {
+  role: Role; go: (s: Screen) => void; openIncident: (name: string) => void; openDevice: (name: string) => void;
+  overrides: Overrides; aiOn: boolean; acked: boolean; escalation: number;
+}) {
   const [filter, setFilter] = useState<"all" | "critical" | "warning">("all");
   const [updated, setUpdated] = useState(false);
-  const visibleIncidents = incidents.filter((item) => (role !== "Helpdesk" && role !== "Intern" || item.kind !== "ai") && (filter === "all" || (filter === "critical" ? item.kind === "down" : item.kind !== "down")));
+  const counts = summaryCounts(overrides);
+  const live = liveIncidents(overrides, aiOn).filter((item) => (role !== "Helpdesk" && role !== "Intern") || item.kind !== "ai");
+  const outages = live.filter((item) => item.kind === "down").length;
+  const warnings = live.length - outages;
+  const visibleIncidents = live.filter((item) => filter === "all" || (filter === "critical" ? item.kind === "down" : item.kind !== "down"));
+  const awaitingAck = !acked && overrides[FAC_AP]?.status !== "Up";
   return <>
     <PageHeader eyebrow="CICT Main Campus / Network operations" title="Network overview" description="Thursday, 22 October 2026 · Sample monitoring snapshot" actions={<>{role === "Admin" && <Button variant="secondary" icon="activity" onClick={() => go("monitoring")}>Monitoring setup</Button>}<Status type="neutral">Sample monitoring</Status><Button variant="secondary" icon="refresh" onClick={() => setUpdated(true)}>Refresh snapshot</Button></>}/>
     {role === "Intern" && <div className="permission-banner"><Icon name="eye"/><span><strong>View-only access.</strong> Actions and sensitive controls are unavailable for the Intern role.</span></div>}
     <section className="summary-grid">
       <SummaryCard icon="router" label="Total devices" value="48" detail="Across 3 network tiers" tone="blue"/>
-      <SummaryCard icon="check" label="Up" value="41" detail="85.4% healthy" tone="green"/>
-      <SummaryCard icon="warning" label="Degraded" value="5" detail="2 need attention" tone="amber"/>
-      <SummaryCard icon="down" label="Down" value="2" detail="Critical intervention" tone="red"/>
+      <SummaryCard icon="check" label="Up" value={String(counts.Up)} detail={`${(counts.Up / 48 * 100).toFixed(1)}% healthy`} tone="green"/>
+      <SummaryCard icon="warning" label="Degraded" value={String(counts.Degraded)} detail={`${warnings} need attention`} tone="amber"/>
+      <SummaryCard icon="down" label="Down" value={String(counts.Down)} detail="Critical intervention" tone="red"/>
     </section>
-    <div className="operations-strip"><span><Icon name="activity" size={16}/><strong>Sample poll interval · 60s</strong><span aria-live="polite">{updated ? "Sample snapshot refreshed · No live devices queried" : "Sample data timestamp · 09:18:00 AM"}</span></span><span><Icon name="warning" size={15}/><strong>2 sample outages</strong> require attention</span></div>
+    <div className="operations-strip"><span><Icon name="activity" size={16}/><strong>Sample poll interval · 60s</strong><span aria-live="polite">{updated ? "Sample snapshot refreshed · No live devices queried" : "Sample data timestamp · 09:18:00 AM"}</span></span><span><Icon name="warning" size={15}/><strong>{counts.Down} sample {counts.Down === 1 ? "outage" : "outages"}</strong> {counts.Down === 1 ? "requires" : "require"} attention</span></div>
     <section className="triage-panel card">
-      <div className="card-head"><div><h2>Needs attention <span className="section-count">4</span></h2><p>Investigate outages first. Warnings are advisory and require review.</p></div>{permissions[role].includes("history") && <Button variant="ghost" icon="clock" onClick={() => go("history")}>Incident history</Button>}</div>
-      <div className="triage-toolbar"><div className="triage-tabs"><Button variant={filter === "all" ? "primary" : "ghost"} onClick={() => setFilter("all")}>All incidents · 4</Button><Button variant={filter === "critical" ? "primary" : "ghost"} onClick={() => setFilter("critical")}>Outages · 2</Button><Button variant={filter === "warning" ? "primary" : "ghost"} onClick={() => setFilter("warning")}>Warnings · 2</Button></div><span>Sorted by severity</span></div>
+      <div className="card-head"><div><h2>Needs attention <span className="section-count">{live.length}</span></h2><p>Investigate outages first. Warnings are advisory and require review.</p></div>{permissions[role].includes("history") && <Button variant="ghost" icon="clock" onClick={() => go("history")}>Incident history</Button>}</div>
+      <div className="triage-toolbar"><div className="triage-tabs"><Button variant={filter === "all" ? "primary" : "ghost"} onClick={() => setFilter("all")}>All incidents · {live.length}</Button><Button variant={filter === "critical" ? "primary" : "ghost"} onClick={() => setFilter("critical")}>Outages · {outages}</Button><Button variant={filter === "warning" ? "primary" : "ghost"} onClick={() => setFilter("warning")}>Warnings · {warnings}</Button></div><span>Sorted by severity</span></div>
       <div className="triage-table" role="table" aria-label="Active network incidents">
         <div className="triage-columns" role="row"><span role="columnheader">State</span><span role="columnheader">Device / issue</span><span role="columnheader">Location</span><span role="columnheader">Detected</span><span role="columnheader">Response</span><span role="columnheader">Action</span></div>
         {visibleIncidents.map((item) => <div className={`triage-entry severity-${item.kind}`} role="row" key={item.name}>
@@ -256,11 +362,13 @@ function Dashboard({ role, go, openIncident }: { role: Role; go: (s: Screen) => 
           <span role="cell" className="triage-device"><strong>{item.name}</strong><small>{item.detail}</small></span>
           <span role="cell" className="triage-location">{item.location}</span>
           <span role="cell" className="triage-time">{item.time}</span>
-          <span role="cell" className="triage-response">{item.kind === "ai" ? "Administrator review" : item.status}</span>
+          <span role="cell" className="triage-response">{item.kind === "ai" ? "Administrator review" : item.name === FAC_AP && acked ? "Acknowledged" : item.status}</span>
           <span role="cell"><Button variant="ghost" icon="arrow" onClick={() => openIncident(item.name)}>Details</Button></span>
         </div>)}
+        {visibleIncidents.length === 0 && <p className="empty-message">No active incidents in this view.</p>}
       </div>
-      <div className="triage-escalation"><Icon name="clock" size={16}/><span><strong>Awaiting acknowledgement:</strong> CICT-FAC-AP-03</span><span>Secondary contact escalation in <strong>04:12</strong></span></div>
+      {awaitingAck ? <div className="triage-escalation"><Icon name="clock" size={16}/><span><strong>Awaiting acknowledgement:</strong> {FAC_AP}</span><span>{escalationSentence(escalation)}</span></div>
+        : <div className="triage-escalation"><Icon name="check" size={16}/><span><strong>All outage incidents are acknowledged or resolved.</strong></span></div>}
     </section>
     <section className="dashboard-grid overview-support">
       <article className="card topology-card">
@@ -268,7 +376,7 @@ function Dashboard({ role, go, openIncident }: { role: Role; go: (s: Screen) => 
         <div className="topology">
           <svg className="topology-lines" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M50 20 20 46M50 20 49 48M50 20 79 46M20 46 10 78M20 46 34 79M49 48 63 79M79 46 89 78"/></svg>
           <span className="zone z1">Core</span><span className="zone z2">Floor distribution</span><span className="zone z3">Endpoints</span>
-          {nodes.map((n) => <button key={n.name} className={`topology-node node-${n.status}`} style={{ left: `${n.x}%`, top: `${n.y}%` }} onClick={() => go("device")}><span className="node-icon"><Icon name={n.kind} size={19}/></span><strong>{n.label}</strong><small>{n.name}</small><Status type={n.status as "up" | "down" | "degraded"}>{n.status === "up" ? "Up" : n.status === "down" ? "Down" : "Degraded"}</Status></button>)}
+          {nodes.map((n) => { const status = overrides[n.name]?.status?.toLowerCase() ?? n.status; return <button key={n.name} className={`topology-node node-${status}`} style={{ left: `${n.x}%`, top: `${n.y}%` }} onClick={() => openDevice(n.name)}><span className="node-icon"><Icon name={n.kind} size={19}/></span><strong>{n.label}</strong><small>{n.name}</small><Status type={status as "up" | "down" | "degraded"}>{status === "up" ? "Up" : status === "down" ? "Down" : "Degraded"}</Status></button>; })}
         </div>
         <div className="topology-foot"><span><Icon name="activity" size={15}/> Average campus latency <strong>14 ms</strong></span><button className="link-btn" onClick={() => go("devices")}>View all 48 devices <Icon name="arrow" size={14}/></button></div>
       </article>
@@ -353,15 +461,16 @@ const sampleDevices: DeviceRecord[] = [
   { name: "CICT-LAB3-AP-06", type: "Access point", location: "Laboratory 3 · 2F", status: "Degraded", latency: "31 ms", uptime: "99.11%", ip: "10.20.3.36" },
   { name: "CICT-F2-SW-02", type: "Switch", location: "2nd Floor", status: "Degraded", latency: "19 ms", uptime: "99.28%", ip: "10.20.2.22" },
   { name: "CICT-SRV-01", type: "Server", location: "Server Room", status: "Up", latency: "4 ms", uptime: "99.98%", ip: "10.20.0.20" },
+  { name: "CICT-LAB2-AP-04", type: "Access point", location: "Laboratory 2 · 2F", status: "Up", latency: "7 ms", uptime: "99.84%", ip: "10.20.2.14" },
 ];
 
-function Devices({ role, go }: { role: Role; go: (s: Screen) => void }) {
+function Devices({ role, go, openDevice, overrides }: { role: Role; go: (s: Screen) => void; openDevice: (name: string) => void; overrides: Overrides }) {
   const [rows, setRows] = useState(sampleDevices);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("All statuses");
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ name: "", type: "Switch", ip: "", location: "", polling: "60", primary: "Maria Santos", secondary: "Paolo Cruz", checks: { ICMP: true, SNMP: true, TCP: true } });
-  const visible = rows.filter((row) => `${row.name} ${row.type} ${row.location}`.toLowerCase().includes(query.toLowerCase()) && (status === "All statuses" || row.status === status));
+  const visible = rows.map((row) => ({ ...row, ...overrides[row.name] })).filter((row) => `${row.name} ${row.type} ${row.location}`.toLowerCase().includes(query.toLowerCase()) && (status === "All statuses" || row.status === status));
   const save = (event: FormEvent) => {
     event.preventDefault();
     setRows((current) => [...current, { name: form.name, type: form.type, ip: form.ip, location: form.location, status: "Up", latency: "14 ms", uptime: "100.00%" }]);
@@ -371,7 +480,7 @@ function Devices({ role, go }: { role: Role; go: (s: Screen) => void }) {
   return <>
     <PageHeader eyebrow="Inventory" title="Devices" description="Search the sample campus inventory and inspect device health." actions={role === "Admin" ? <Button icon="plus" onClick={() => setAdding(true)}>Add device</Button> : undefined}/>
     <div className="filter-bar"><div className="search-field"><Icon name="search"/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search devices, types or locations"/></div><label><Icon name="filter"/><select value={status} onChange={(event) => setStatus(event.target.value)}><option>All statuses</option><option>Up</option><option>Degraded</option><option>Down</option></select></label></div>
-    <article className="card table-card"><div className="table-meta"><span><strong>{visible.length} devices</strong> shown</span><small>Sample inventory · 48 total devices</small></div><div className="table-scroll"><table><thead><tr><th>Device</th><th>Type</th><th>Location</th><th>Status</th><th>Latency</th><th>30-day uptime</th><th/></tr></thead><tbody>{visible.map((row) => <tr key={row.name} onClick={() => go("device")}><td><strong>{row.name}</strong><small>{row.ip}</small></td><td>{row.type}</td><td>{row.location}</td><td><Status type={row.status === "Up" ? "up" : row.status === "Down" ? "down" : "degraded"}>{row.status}</Status></td><td>{row.latency}</td><td>{row.uptime}</td><td><Icon name="arrow"/></td></tr>)}</tbody></table></div></article>
+    <article className="card table-card"><div className="table-meta"><span><strong>{visible.length} devices</strong> shown</span><small>Sample inventory · 48 total devices</small></div><div className="table-scroll"><table><thead><tr><th>Device</th><th>Type</th><th>Location</th><th>Status</th><th>Latency</th><th>30-day uptime</th><th/></tr></thead><tbody>{visible.map((row) => <tr key={row.name} onClick={() => openDevice(row.name)}><td><strong>{row.name}</strong><small>{row.ip}</small></td><td>{row.type}</td><td>{row.location}</td><td><Status type={row.status === "Up" ? "up" : row.status === "Down" ? "down" : "degraded"}>{row.status}</Status></td><td>{row.latency}</td><td>{row.uptime}</td><td><Icon name="arrow"/></td></tr>)}</tbody></table></div></article>
     {adding && <div className="modal-layer"><form className="modal-card user-modal" onSubmit={save}><button type="button" className="modal-close" onClick={() => setAdding(false)}><Icon name="close"/></button><span className="overline blue">Inventory · sample data only</span><h2>Add device</h2><p>Add a monitored device to this prototype's in-memory sample inventory.</p><div className="form-grid"><label>Name<input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })}/></label><label>Type<select value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value })}><option>Router</option><option>Switch</option><option>Access point</option><option>Server</option></select></label><label>IP address<input required value={form.ip} onChange={(event) => setForm({ ...form, ip: event.target.value })}/></label><label>Location<input required value={form.location} onChange={(event) => setForm({ ...form, location: event.target.value })}/></label><label>Polling interval (seconds)<input type="number" min="10" value={form.polling} onChange={(event) => setForm({ ...form, polling: event.target.value })}/></label><label>Primary contact<input value={form.primary} onChange={(event) => setForm({ ...form, primary: event.target.value })}/></label><label>Secondary contact<input value={form.secondary} onChange={(event) => setForm({ ...form, secondary: event.target.value })}/></label></div><div className="check-row monitoring-checks"><b>Checks</b>{(["ICMP", "SNMP", "TCP"] as const).map((check) => <label className="check-label" key={check}><input type="checkbox" checked={form.checks[check]} onChange={(event) => setForm({ ...form, checks: { ...form.checks, [check]: event.target.checked } })}/>{check}</label>)}</div><div className="modal-actions"><Button variant="secondary" onClick={() => setAdding(false)}>Cancel</Button><Button type="submit">Save device</Button></div></form></div>}
   </>;
 }
@@ -391,76 +500,91 @@ function MiniChart({ type = "latency" }: { type?: "latency" | "loss" }) {
   </div>;
 }
 
-function DeviceDetail({ role, go, openReboot, onDenied }: { role: Role; go: (s: Screen) => void; openReboot: () => void; onDenied: () => void }) {
+function DeviceDetail({ role, go, device, openReboot, openIncident, onDenied }: { role: Role; go: (s: Screen) => void; device: DeviceRecord; openReboot: () => void; openIncident: () => void; onDenied: () => void }) {
   const [range, setRange] = useState("24 hours");
   const [latency, setLatency] = useState("60");
   const [loss, setLoss] = useState("6");
   const [notice, setNotice] = useState("");
   const admin = role === "Admin";
   const intern = role === "Intern";
+  const profile = profileFor(device);
+  const down = device.status === "Down";
+  const up = device.status === "Up";
+  const statusType = up ? "up" : down ? "down" : "degraded";
+  const avgLatency = down ? "54" : up ? "9" : "31";
+  const avgLoss = down ? "8.4" : up ? "0.1" : "3.1";
+  const availability = range === "24 hours" ? (down ? "0.0%" : up ? "100%" : "97.9%") : range === "7 days" ? (down ? "98.8%" : "99.9%") : device.uptime;
+  const typeLabel = device.type === "Switch" ? "Managed switch" : device.type;
+  const typeIcon: IconName = device.type === "Router" ? "router" : device.type === "Access point" ? "wifi" : device.type === "Server" ? "server" : "switch";
+  const checks: [string, string, "up" | "down" | "degraded"][] = down ? [["ICMP", "No response", "down"], ["SNMP", "Timeout", "down"], ["TCP · Port 22", "Unreachable", "down"]]
+    : up ? [["ICMP", "Responding", "up"], ["SNMP", "Responding", "up"], ["TCP · Port 22", "Responding", "up"]]
+    : [["ICMP", "Slow response", "degraded"], ["SNMP", "Responding", "up"], ["TCP · Port 22", "Responding", "up"]];
   return <>
     <button className="back-link" onClick={() => go("devices")}>← Devices</button>
-    <PageHeader eyebrow="Devices / Device details" title="CICT-LAB2-SW-01" description="Cisco Catalyst 2960-X · Access switch" actions={<>{(admin || intern) && <Button variant="secondary" icon="terminal" visuallyDisabled={intern} onClick={() => intern ? (setNotice("Not allowed for your role. This attempt was logged."), onDenied()) : go("ssh")}>Open SSH</Button>}{(admin || intern) && <Button variant="danger" icon="refresh" visuallyDisabled={intern} onClick={() => intern ? (setNotice("Not allowed for your role. This attempt was logged."), onDenied()) : openReboot()}>Reboot</Button>}</>}/>
+    <PageHeader eyebrow="Devices / Device details" title={device.name} description={profile.summary} actions={<>{(admin || intern) && <Button variant="secondary" icon="terminal" visuallyDisabled={intern} onClick={() => intern ? (setNotice("Not allowed for your role. This attempt was logged."), onDenied()) : go("ssh")}>Open SSH</Button>}{(admin || intern) && <Button variant="danger" icon="refresh" visuallyDisabled={intern} onClick={() => intern ? (setNotice("Not allowed for your role. This attempt was logged."), onDenied()) : openReboot()}>Reboot</Button>}</>}/>
     {notice && <div className="permission-banner"><Icon name="lock"/><span>{notice}</span></div>}
-    <div className="device-status-strip"><Status type="down">Down</Status><span>Last response <strong>36 minutes ago</strong></span><span>Incident <button className="link-btn" onClick={() => go("incident")}>INC-2026-0418</button></span>{role !== "Admin" && <span className="view-only-note"><Icon name="lock" size={14}/> Read-only view</span>}</div>
+    <div className="device-status-strip"><Status type={statusType}>{device.status}</Status><span>Last response <strong>{up ? "just now" : profile.lastResponse}</strong></span>{profile.incident && !up ? <span>Incident <button className="link-btn" onClick={openIncident}>{profile.incident}</button></span> : <span>No active incident</span>}{role !== "Admin" && <span className="view-only-note"><Icon name="lock" size={14}/> Read-only view</span>}</div>
     <section className="device-layout">
       <div className="device-main">
         <article className="card detail-card"><div className="card-head"><div><h2>Device information</h2><p>Inventory and monitoring configuration</p></div>{admin && <Button variant="ghost" icon="edit" onClick={() => go("monitoring")}>Edit</Button>}</div>
-          <dl className="info-grid"><div><dt>Device type</dt><dd><Icon name="switch"/> Managed switch</dd></div><div><dt>IP address</dt><dd>10.20.2.11</dd></div><div><dt>Location</dt><dd>Laboratory 2 · 2nd Floor</dd></div><div><dt>Model</dt><dd>Cisco Catalyst 2960-X</dd></div><div><dt>Polling interval</dt><dd>60 seconds</dd></div><div><dt>Checks</dt><dd>ICMP · SNMP · TCP/22</dd></div><div><dt>Uptime (30 days)</dt><dd>99.72%</dd></div><div><dt>Primary contact</dt><dd>Engr. Maria Santos</dd></div><div><dt>Connected devices</dt><dd>CICT-LAB2-AP-04 · 25 clients</dd></div></dl>
+          <dl className="info-grid"><div><dt>Device type</dt><dd><Icon name={typeIcon}/> {typeLabel}</dd></div><div><dt>IP address</dt><dd>{device.ip}</dd></div><div><dt>Location</dt><dd>{device.location}</dd></div><div><dt>Model</dt><dd>{profile.model}</dd></div><div><dt>Polling interval</dt><dd>60 seconds</dd></div><div><dt>Checks</dt><dd>ICMP · SNMP · TCP/22</dd></div><div><dt>Uptime (30 days)</dt><dd>{device.uptime}</dd></div><div><dt>Primary contact</dt><dd>Engr. Maria Santos</dd></div><div><dt>Connected devices</dt><dd>{profile.connected}</dd></div></dl>
         </article>
-        <article className="card chart-card"><div className="card-head"><div><h2>Latency · {range}</h2><p>ICMP response time · alert threshold {latency} ms</p></div><strong className="metric">54 <small>ms avg</small></strong></div><MiniChart/><div className="chart-legend"><span><i className="line blue"/>Latency</span><span><i className="line dashed"/>{latency} ms threshold</span></div></article>
-        <article className="card chart-card"><div className="card-head"><div><h2>Packet loss · {range}</h2><p>Percentage of packets lost · alert threshold {loss}%</p></div><strong className="metric amber-text">8.4 <small>% avg</small></strong></div><MiniChart type="loss"/><div className="chart-legend"><span><i className="line amber"/>Packet loss</span><span><i className="line dashed"/>{loss}% threshold</span></div></article>
+        <article className="card chart-card"><div className="card-head"><div><h2>Latency · {range}</h2><p>ICMP response time · alert threshold {latency} ms</p></div><strong className="metric">{avgLatency} <small>ms avg</small></strong></div><MiniChart/><div className="chart-legend"><span><i className="line blue"/>Latency</span><span><i className="line dashed"/>{latency} ms threshold</span></div></article>
+        <article className="card chart-card"><div className="card-head"><div><h2>Packet loss · {range}</h2><p>Percentage of packets lost · alert threshold {loss}%</p></div><strong className={`metric ${up ? "" : "amber-text"}`}>{avgLoss} <small>% avg</small></strong></div><MiniChart type="loss"/><div className="chart-legend"><span><i className="line amber"/>Packet loss</span><span><i className="line dashed"/>{loss}% threshold</span></div></article>
         <article className="card detail-card"><div className="card-head"><div><h2>Threshold settings</h2><p>Changes apply to sample monitoring only.</p></div></div><div className="form-grid threshold-form"><label>Latency threshold (ms)<input type="number" value={latency} disabled={!admin} onChange={(event) => setLatency(event.target.value)}/></label><label>Packet loss threshold (%)<input type="number" value={loss} disabled={!admin} onChange={(event) => setLoss(event.target.value)}/></label>{admin && <div className="schedule-actions"><Button onClick={() => setNotice("Threshold settings saved in sample state.")}>Save thresholds</Button></div>}</div></article>
       </div>
       <aside className="device-aside">
-        <article className="card detail-card"><div className="card-head"><div><h2>Availability</h2><p>Sample uptime and availability</p></div></div><div className="range-tabs">{["24 hours", "7 days", "30 days"].map((item) => <Button key={item} variant={range === item ? "primary" : "ghost"} onClick={() => setRange(item)}>{item}</Button>)}</div><div className="availability-stat"><strong>{range === "24 hours" ? "0.0%" : range === "7 days" ? "98.8%" : "99.72%"}</strong><span>availability</span></div></article>
-        <article className="card checks-card"><div className="card-head"><div><h2>Health checks</h2><p>Current polling results</p></div></div>{[["ICMP", "No response", "down"],["SNMP", "Timeout", "down"],["TCP · Port 22", "Unreachable", "down"]].map((c) => <div className="check-row" key={c[0]}><span><Icon name="activity"/><b>{c[0]}</b></span><Status type={c[2] as "down"}>{c[1]}</Status></div>)}</article>
+        <article className="card detail-card"><div className="card-head"><div><h2>Availability</h2><p>Sample uptime and availability</p></div></div><div className="range-tabs">{["24 hours", "7 days", "30 days"].map((item) => <Button key={item} variant={range === item ? "primary" : "ghost"} onClick={() => setRange(item)}>{item}</Button>)}</div><div className="availability-stat"><strong>{availability}</strong><span>availability</span></div></article>
+        <article className="card checks-card"><div className="card-head"><div><h2>Health checks</h2><p>Current polling results</p></div></div>{checks.map((c) => <div className="check-row" key={c[0]}><span><Icon name="activity"/><b>{c[0]}</b></span><Status type={c[2]}>{c[1]}</Status></div>)}</article>
         <article className="card contacts-card"><div className="card-head"><div><h2>Escalation contacts</h2></div></div><div><Avatar name="Maria Santos"/><span><strong>Engr. Maria Santos</strong><small>Network Administrator · Primary</small><a href="mailto:msantos@bulsu.edu.ph">msantos@bulsu.edu.ph</a></span></div><div><Avatar name="Paolo Cruz"/><span><strong>Paolo Cruz</strong><small>CICT Staff · Secondary</small><a href="mailto:pcruz@bulsu.edu.ph">pcruz@bulsu.edu.ph</a></span></div></article>
       </aside>
     </section>
   </>;
 }
 
-function RebootModal({ onClose, onConfirm }: { onClose: () => void; onConfirm: (reason: string) => void }) {
+function RebootModal({ device, onClose, onConfirm, onRecovered }: { device: DeviceRecord; onClose: () => void; onConfirm: (reason: string) => void; onRecovered: () => void }) {
+  const profile = profileFor(device);
   const [reason, setReason] = useState("");
   const [phase, setPhase] = useState<"confirm" | "rebooting" | "checking" | "result">("confirm");
+  const timers = useRef<number[]>([]);
+  useEffect(() => () => timers.current.forEach((timer) => window.clearTimeout(timer)), []);
+  useEffect(() => { if (phase === "result" && profile.recovers) onRecovered(); }, [phase]);
   const confirm = () => {
     onConfirm(reason.trim());
     setPhase("rebooting");
-    window.setTimeout(() => setPhase("checking"), 900);
-    window.setTimeout(() => setPhase("result"), 1800);
+    timers.current = [window.setTimeout(() => setPhase("checking"), 900), window.setTimeout(() => setPhase("result"), 1800)];
   };
   return <div className="modal-layer"><div className="modal-card">
-    {phase === "confirm" ? <><div className="modal-icon danger"><Icon name="refresh" size={24}/></div><button className="modal-close" onClick={onClose}><Icon name="close"/></button><span className="overline red">Remote remediation · simulation</span><h2>Reboot CICT-LAB2-SW-01?</h2><p>A live reboot will interrupt network service for CICT-LAB2-AP-04 and about 25 clients in Laboratory 2.</p>
-      <div className="impact-box"><strong><Icon name="warning"/> Service interruption</strong><p>CICT-LAB2-AP-04 and about 25 clients in Laboratory 2</p></div>
+    {phase === "confirm" ? <><div className="modal-icon danger"><Icon name="refresh" size={24}/></div><button className="modal-close" onClick={onClose}><Icon name="close"/></button><span className="overline red">Remote remediation · simulation</span><h2>Reboot {device.name}?</h2><p>A live reboot will interrupt network service for {profile.impact}.</p>
+      <div className="impact-box"><strong><Icon name="warning"/> Service interruption</strong><p>{profile.impact.charAt(0).toUpperCase() + profile.impact.slice(1)}</p></div>
       <label>Reason for reboot <span>Required</span><textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Describe why this action is necessary…"/></label>
-      <div className="modal-actions"><Button variant="secondary" onClick={onClose}>Cancel</Button><Button variant="danger" icon="refresh" disabled={!reason.trim()} onClick={confirm}>Confirm</Button></div></> : phase === "rebooting" ? <><div className="modal-icon danger"><Icon name="refresh" size={24}/></div><h2>Rebooting…</h2><p>CICT-LAB2-SW-01 is restarting in this sample workflow.</p></> : phase === "checking" ? <><div className="modal-icon"><Icon name="activity" size={24}/></div><h2>Running health check…</h2><p>Checking ICMP, SNMP, and TCP/22 responses.</p></> : <><div className="modal-icon danger"><Icon name="down" size={27}/></div><span className="overline red">Simulated post-reboot health check</span><h2>Still unreachable</h2><p>Health check 09:06: no response. The device remains Down.</p><div className="modal-actions"><Button onClick={onClose}>Return to device</Button></div></>}
+      <div className="modal-actions"><Button variant="secondary" onClick={onClose}>Cancel</Button><Button variant="danger" icon="refresh" disabled={!reason.trim()} onClick={confirm}>Confirm</Button></div></> : phase === "rebooting" ? <><div className="modal-icon danger"><Icon name="refresh" size={24}/></div><h2>Rebooting…</h2><p>{device.name} is restarting in this sample workflow.</p></> : phase === "checking" ? <><div className="modal-icon"><Icon name="activity" size={24}/></div><h2>Running health check…</h2><p>Checking ICMP, SNMP, and TCP/22 responses.</p></> : profile.recovers ? <><div className="modal-icon success"><Icon name="check" size={27}/></div><span className="overline green">Simulated post-reboot health check</span><h2>Device recovered</h2><p>Health check {profile.checkAt}: ICMP, SNMP, and TCP/22 are responding. {device.name} is now Up{profile.incident ? ` and incident ${profile.incident} is resolved` : ""}.</p><div className="modal-actions"><Button onClick={onClose}>Return to device</Button></div></> : <><div className="modal-icon danger"><Icon name="down" size={27}/></div><span className="overline red">Simulated post-reboot health check</span><h2>Still unreachable</h2><p>Health check {profile.checkAt}: no response. The device remains Down.</p><div className="modal-actions"><Button onClick={onClose}>Return to device</Button></div></>}
   </div></div>;
 }
 
-function SSH({ go, onStart, onEnd }: { go: (s: Screen) => void; onStart: () => void; onEnd: () => void }) {
+function SSH({ go, device, onStart, onEnd }: { go: (s: Screen) => void; device: DeviceRecord; onStart: () => void; onEnd: () => void }) {
   useEffect(() => { onStart(); }, []);
   return <>
-    <button className="back-link" onClick={() => go("device")}>← CICT-LAB2-SW-01</button>
-    <PageHeader eyebrow="Remote session" title="Browser SSH terminal" description="Secure diagnostic access to CICT-LAB2-SW-01." actions={<Button variant="danger" icon="close" onClick={() => { onEnd(); go("device"); }}>End session</Button>}/>
-    <div className="terminal-shell"><div className="terminal-bar"><span className="terminal-dots"><i/><i/><i/></span><strong>admin@CICT-LAB2-SW-01</strong><span><Icon name="clock" size={15}/> Idle timeout 09:42</span></div><div className="recording-banner"><span/><strong>Sample SSH session · no live connection</strong><small>Commands and output are illustrative only</small></div><pre>{`Connected to 10.20.2.11
+    <button className="back-link" onClick={() => go("device")}>← {device.name}</button>
+    <PageHeader eyebrow="Remote session" title="Browser SSH terminal" description={`Secure diagnostic access to ${device.name}.`} actions={<Button variant="danger" icon="close" onClick={() => { onEnd(); go("device"); }}>End session</Button>}/>
+    <div className="terminal-shell"><div className="terminal-bar"><span className="terminal-dots"><i/><i/><i/></span><strong>admin@{device.name}</strong><span><Icon name="clock" size={15}/> Idle timeout 09:42</span></div><div className="recording-banner"><span/><strong>Sample SSH session · no live connection</strong><small>Commands and output are illustrative only</small></div><pre>{`Connected to ${device.ip}
 Cisco IOS Software, C2960X Software (C2960X-UNIVERSALK9-M)
 
-CICT-LAB2-SW-01# show interfaces status
+${device.name}# show interfaces status
 Port      Name               Status       Vlan       Duplex  Speed
 Gi1/0/1   UPLINK-CORE        connected    trunk      a-full  a-1000
 Gi1/0/2   LAB2-AP-04         connected    220        a-full  a-1000
 Gi1/0/3   LAB2-PC-01         connected    221        a-full  a-100
 Gi1/0/4   LAB2-PC-02         notconnect   221        auto    auto
 
-CICT-LAB2-SW-01# show processes cpu sorted | include five
+${device.name}# show processes cpu sorted | include five
 CPU utilization for five seconds: 18%/4%; one minute: 16%; five minutes: 14%
 
-CICT-LAB2-SW-01# ping 10.20.0.1 repeat 5
+${device.name}# ping 10.20.0.1 repeat 5
 !!!!!
 Success rate is 100 percent (5/5), round-trip min/avg/max = 1/2/4 ms
 
-CICT-LAB2-SW-01# `}<span className="cursor">█</span></pre></div>
+${device.name}# `}<span className="cursor">█</span></pre></div>
     <div className="terminal-note"><Icon name="info"/><span>Session is recorded and closes after 10 minutes idle</span></div>
   </>;
 }
@@ -475,11 +599,13 @@ const historyRows = [
   ["INC-2026-0413", "CICT-F2-SW-02", "2nd Floor", "SNMP timeout", "Resolved", "Oct 20, 14:25", "Oct 20, 14:29", "Oct 20, 14:44"],
 ];
 
-function History({ go, openIncident }: { go: (s: Screen) => void; openIncident: (name: string) => void }) {
+function History({ go, openIncident, overrides, acked, aiOn }: { go: (s: Screen) => void; openIncident: (name: string) => void; overrides: Overrides; acked: boolean; aiOn: boolean }) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("All statuses");
   const [period, setPeriod] = useState("Last 30 days");
-  const visibleRows = historyRows.filter((row) => {
+  const recoveredFac = overrides[FAC_AP]?.status === "Up";
+  const rows = historyRows.filter((row) => aiOn || row[4] !== "Early warning").map((row) => row[1] === FAC_AP ? [row[0], row[1], row[2], row[3], recoveredFac ? "Resolved" : row[4], row[5], acked ? "Oct 22, 09:19" : row[6], recoveredFac ? "Oct 22, 09:23" : row[7]] : row);
+  const visibleRows = rows.filter((row) => {
     const matchesQuery = row.join(" ").toLowerCase().includes(query.toLowerCase());
     const matchesStatus = status === "All statuses" || row[4] === status;
     return matchesQuery && matchesStatus;
@@ -491,9 +617,38 @@ function History({ go, openIncident }: { go: (s: Screen) => void; openIncident: 
   </>;
 }
 
-function Reports() {
+type ReportType = "daily" | "weekly" | "monthly";
+
+const reportData: Record<ReportType, { title: string; range: string; availability: string; incidents: string; mttd: string; mttr: string; devices: [string, string, number][] }> = {
+  daily: { title: "Daily health summary", range: "Thursday, 22 October 2026 · 00:00 to 09:18", availability: "98.96%", incidents: "4", mttd: "1m 08s", mttr: "21m", devices: [[FAC_AP, "Faculty Room · 3F", 2], ["CICT-LAB2-SW-01", "Laboratory 2 · 2F", 1], ["CICT-LAB3-AP-06", "Laboratory 3 · 2F", 1]] },
+  weekly: { title: "Weekly availability report", range: "16 to 22 October 2026", availability: "99.67%", incidents: "28", mttd: "1m 12s", mttr: "22m", devices: [[FAC_AP, "Faculty Room · 3F", 7], ["CICT-LAB2-SW-01", "Laboratory 2 · 2F", 6], ["CICT-LAB3-AP-06", "Laboratory 3 · 2F", 5], ["CICT-F2-SW-02", "2nd Floor", 3], ["CICT-SRV-01", "Server Room", 2]] },
+  monthly: { title: "Monthly management report", range: "23 September to 22 October 2026", availability: "99.42%", incidents: "127", mttd: "1m 24s", mttr: "26m", devices: [[FAC_AP, "Faculty Room · 3F", 12], ["CICT-LAB2-SW-01", "Laboratory 2 · 2F", 9], ["CICT-LAB3-AP-06", "Laboratory 3 · 2F", 7], ["CICT-F2-SW-02", "2nd Floor", 5], ["CICT-SRV-01", "Server Room", 3]] },
+};
+
+function GeneratedReport({ type, setType, role, onClose }: { type: ReportType; setType: (type: ReportType) => void; role: Role; onClose: () => void }) {
+  const data = reportData[type];
+  const roleLabel = roles.find((item) => item.id === role)!.label;
+  const mostIncidents = data.devices[0][2];
+  const metrics = [["Availability", data.availability], ["Incident count", data.incidents], ["Mean time to detect (MTTD)", data.mttd], ["Mean time to resolve (MTTR)", data.mttr]];
+  const exportCsv = () => downloadCsv(`netknowing-${type}-report.csv`, [["Report", data.title], ["Period", data.range], [], ["Metric", "Value"], ...metrics, [], ["Rank", "Device", "Location", "Incidents"], ...data.devices.map((device, index) => [String(index + 1), device[0], device[1], String(device[2])])]);
+  return <div className="modal-layer report-layer"><div className="modal-card report-sheet" role="dialog" aria-modal="true" aria-label={data.title}>
+    <button className="modal-close" onClick={onClose} aria-label="Close report"><Icon name="close"/></button>
+    <div className="report-top"><span className="overline blue">Generated report · sample data only</span><label className="report-type">Report type<select value={type} onChange={(event) => setType(event.target.value as ReportType)}><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></label></div>
+    <h2>{data.title}</h2>
+    <p>CICT Main Campus · {data.range}</p>
+    <div className="report-meta"><span>Generated 22 Oct 2026, 09:20 AM</span><span>Generated by {roleLabel}</span><span>Sample figures</span></div>
+    <div className="report-metrics">{metrics.map((metric) => <div key={metric[0]}><span>{metric[0]}</span><strong>{metric[1]}</strong></div>)}</div>
+    <h3>Most frequently failing devices</h3>
+    <table className="report-table"><thead><tr><th>#</th><th>Device</th><th>Location</th><th>Incidents</th></tr></thead><tbody>{data.devices.map((device, index) => <tr key={device[0]}><td>{index + 1}</td><td><strong>{device[0]}</strong></td><td>{device[1]}</td><td><div className="report-count"><span className="report-bar"><i style={{ width: `${Math.round(device[2] / mostIncidents * 100)}%` }}/></span><b>{device[2]}</b></div></td></tr>)}</tbody></table>
+    <p className="report-note"><Icon name="info" size={14}/> AI-generated incident summaries appear in management reports only after administrator approval. Rejected drafts are excluded.</p>
+    <div className="modal-actions"><Button variant="secondary" icon="download" onClick={exportCsv}>Download CSV</Button><Button variant="secondary" onClick={() => window.print()}>Print or save as PDF</Button><Button onClick={onClose}>Close</Button></div>
+  </div></div>;
+}
+
+function Reports({ role, onGenerated }: { role: Role; onGenerated: (type: ReportType) => void }) {
   const [period, setPeriod] = useState("30");
   const [notice, setNotice] = useState("");
+  const [reportType, setReportType] = useState<ReportType | null>(null);
   const devices = [["CICT-FAC-AP-03", 12, 88],["CICT-LAB2-SW-01", 9, 68],["CICT-LAB3-AP-06", 7, 53],["CICT-F2-SW-02", 5, 38],["CICT-SRV-01", 3, 23]];
   const rangeLabel = period === "7" ? "Last 7 days" : period === "90" ? "Last 90 days" : "Last 30 days";
   const metrics = period === "7"
@@ -509,8 +664,9 @@ function Reports() {
     <PageHeader eyebrow="Performance" title="Reports & analytics" description={`Reliability trends and operational performance · Sep 23 – Oct 22 · ${rangeLabel.toLowerCase()}.`} actions={<><label className="report-period">Reporting period<select value={period} onChange={(event) => setPeriod(event.target.value)}><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option></select></label><Button icon="download" onClick={() => downloadCsv("netknowing-report.csv", [["Metric", "Value", "Period"], ...metrics.map(([label, value]) => [label, value, rangeLabel]), ...periodDevices.map((device) => [`Incidents: ${device[0]}`, String(device[1]), rangeLabel])])}>Export report</Button></>}/>
     <section className="metric-grid"><SummaryCard icon="check" label={`${period}-day availability`} value={metrics[0][1]} detail={metrics[0][2]} tone="green"/><SummaryCard icon="warning" label="Incident count" value={metrics[1][1]} detail={metrics[1][2]} tone="blue"/><SummaryCard icon="clock" label="Mean time to detect" value={metrics[2][1]} detail={metrics[2][2]} tone="purple"/><SummaryCard icon="refresh" label="Mean time to resolve" value={metrics[3][1]} detail={metrics[3][2]} tone="amber"/></section>
     <section className="reports-grid"><article className="card failure-card"><div className="card-head"><div><h2>Most frequently failing devices</h2><p>Incidents recorded in the selected period</p></div><button className="link-btn" onClick={() => setNotice("Showing the ranked sample devices for " + rangeLabel + ".")}>View details</button></div><div className="bar-list">{periodDevices.map((d, i) => <div className="bar-row" key={d[0]}><span className="rank">{i + 1}</span><div><span><strong>{d[0]}</strong><b>{d[1]} incidents</b></span><i><em style={{ width: `${d[2]}%` }}/></i></div></div>)}</div></article>
-    <article className="card schedule-card"><div className="card-head"><div><h2>Scheduled reports</h2><p>Recurring operational summaries</p></div><Button variant="ghost" icon="plus" onClick={() => setNotice("Daily, weekly and monthly schedules are sample entries; scheduling requires a connected backend.")}>Schedule</Button></div>{[["Daily health summary", "Every day · 7:00 AM", "Daily"],["Weekly availability", "Every Monday · 8:00 AM", "Weekly"],["Monthly management report", "1st day · 9:00 AM", "Monthly"]].map((x) => <div className="schedule-row" key={x[0]}><span className="schedule-icon"><Icon name="calendar"/></span><div><strong>{x[0]}</strong><small>{x[1]}</small></div><Status type="neutral">{x[2]}</Status><button className="icon-btn" title={`Download ${x[0]}`} onClick={() => downloadCsv("netknowing-scheduled-report.csv", [["Report", "Schedule", "Period"], [x[0], x[1], rangeLabel]])}><Icon name="download"/></button></div>)}<div className="schedule-actions"><Button variant="secondary" icon="download" onClick={() => downloadCsv("netknowing-latest-report.csv", [["Report", "Generated for"], ["Latest operational summary", rangeLabel]])}>Download latest</Button><Button icon="chart" onClick={() => { downloadCsv("netknowing-generated-report.csv", [["Report", "Period"], ["Generated operational report", rangeLabel]]); setNotice("Sample report generated and downloaded."); }}>Generate report</Button></div></article></section>
+    <article className="card schedule-card"><div className="card-head"><div><h2>Scheduled reports</h2><p>Recurring operational summaries</p></div><Button variant="ghost" icon="plus" onClick={() => setNotice("Daily, weekly and monthly schedules are sample entries; scheduling requires a connected backend.")}>Schedule</Button></div>{[["Daily health summary", "Every day · 7:00 AM", "Daily"],["Weekly availability", "Every Monday · 8:00 AM", "Weekly"],["Monthly management report", "1st day · 9:00 AM", "Monthly"]].map((x) => <div className="schedule-row" key={x[0]}><span className="schedule-icon"><Icon name="calendar"/></span><div><strong>{x[0]}</strong><small>{x[1]}</small></div><Status type="neutral">{x[2]}</Status><button className="icon-btn" title={`Download ${x[0]}`} onClick={() => downloadCsv("netknowing-scheduled-report.csv", [["Report", "Schedule", "Period"], [x[0], x[1], rangeLabel]])}><Icon name="download"/></button></div>)}<div className="schedule-actions"><Button variant="secondary" icon="download" onClick={() => downloadCsv("netknowing-latest-report.csv", [["Report", "Generated for"], ["Latest operational summary", rangeLabel]])}>Download latest</Button><Button icon="chart" onClick={() => { const type: ReportType = period === "7" ? "weekly" : "monthly"; setReportType(type); onGenerated(type); }}>Generate report</Button></div></article></section>
     {notice && <div className="inline-note" role="status"><Icon name="info" size={16}/><span>{notice}</span></div>}
+    {reportType && <GeneratedReport type={reportType} setType={setReportType} role={role} onClose={() => setReportType(null)}/>}
   </>;
 }
 
@@ -576,7 +732,7 @@ function Audit({ rows }: { rows: AuditRow[] }) {
   return <>
     <PageHeader eyebrow="Governance" title="Audit trail" description="Immutable record of access and administrative actions." actions={<Button variant="secondary" icon="download" onClick={() => downloadCsv("netknowing-audit.csv", [["Time", "User", "Action", "Target", "Result", "Details"], ...filteredRows])}>Export audit log</Button>}/>
     <div className="filter-bar"><div className="search-field"><Icon name="search"/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search user, action or target"/></div><label><Icon name="filter"/><select value={action} onChange={(event) => setAction(event.target.value)}><option>All actions</option><option>Denied attempts</option><option>Remote actions</option></select></label><label><Icon name="calendar"/><select><option>All sample dates</option><option>Today</option><option>Last 7 days</option></select></label></div>
-    <article className="card audit-card"><div className="audit-head"><span>Time</span><span>User</span><span>Action</span><span>Target</span><span>Result</span><span>Details</span></div>{filteredRows.map((r) => <div className={`audit-row ${r[4]}`} key={r.join()}><time>{r[0]}</time><div className="user-cell"><Avatar name={r[1]}/><strong>{r[1]}</strong></div><span><i className={`audit-icon ${r[4]}`}><Icon name={r[4] === "denied" ? "shield" : r[2].includes("SSH") ? "terminal" : r[2].includes("Reboot") ? "refresh" : "check"}/></i>{r[2]}</span><span>{r[3]}</span><Status type={r[4] === "denied" ? "down" : "up"}>{r[4] === "denied" ? "Denied" : "Completed"}</Status><span>{r[5]}</span></div>)}{filteredRows.length === 0 && <p className="empty-message">No audit events match these filters.</p>}</article>
+    <article className="card audit-card"><div className="audit-head"><span>Time</span><span>User</span><span>Action</span><span>Target</span><span>Result</span><span>Details</span></div>{filteredRows.map((r, index) => <div className={`audit-row ${r[4]}`} key={`${index}-${r.join()}`}><time>{r[0]}</time><div className="user-cell"><Avatar name={r[1]}/><strong>{r[1]}</strong></div><span><i className={`audit-icon ${r[4]}`}><Icon name={r[4] === "denied" ? "shield" : r[2].includes("SSH") ? "terminal" : r[2].includes("Reboot") ? "refresh" : "check"}/></i>{r[2]}</span><span>{r[3]}</span><Status type={r[4] === "denied" ? "down" : "up"}>{r[4] === "denied" ? "Denied" : "Completed"}</Status><span>{r[5]}</span></div>)}{filteredRows.length === 0 && <p className="empty-message">No audit events match these filters.</p>}</article>
   </>;
 }
 
@@ -585,25 +741,24 @@ function Insights({ role, aiOn, setAiOn }: { role: Role; aiOn: boolean; setAiOn:
   return <>
     <PageHeader eyebrow="Assisted monitoring" title="AI insights" description={`${role === "Staff" || role === "Director" ? "Read-only view · " : ""}Pattern-based early warnings and maintenance prioritization.`} actions={role === "Admin" ? <label className="toggle-wrap"><span>AI features</span><button className={`toggle ${aiOn ? "on" : ""}`} onClick={() => setAiOn(!aiOn)}><i/></button><strong>{aiOn ? "On" : "Off"}</strong></label> : <Status type="ai">AI monitoring on</Status>}/>
     <div className="ai-principle"><Icon name="info"/><span>The ranking guides maintenance planning and does not predict when a device will fail. Nothing on this page acts on a device by itself.</span></div>
-    {!aiOn ? <><div className="permission-banner"><Icon name="info"/><span>AI features are off. Monitoring, alerts, and remediation continue as normal.</span></div><article className="card empty-state"><span className="summary-icon purple"><Icon name="spark"/></span><h2>AI features are off</h2><p>Early warnings and risk rankings are paused. Standard network monitoring remains active.</p><Button variant="purple" onClick={() => setAiOn(true)}>Turn AI features on</Button></article></> :
+    {!aiOn ? <><div className="permission-banner"><Icon name="info"/><span>AI features are off. Monitoring, alerts, and remediation continue as normal.</span></div><article className="card empty-state"><span className="summary-icon purple"><Icon name="spark"/></span><h2>AI features are off</h2><p>Early warnings, risk rankings and AI incident drafts are paused. The AI never sends commands to a device, on or off.</p><div className="still-running" aria-label="Services still running"><span><Icon name="check" size={14}/>Polling</span><span><Icon name="check" size={14}/>Alerting</span><span><Icon name="check" size={14}/>Remote remediation</span></div>{role === "Admin" ? <Button variant="purple" onClick={() => setAiOn(true)}>Turn AI features on</Button> : <Status type="neutral">Only an administrator can turn AI features on</Status>}</article></> :
     <section className="insights-grid"><article className="card warning-card"><div className="card-head"><div><h2>Early warnings</h2><p>Signals that may need closer observation</p></div><Status type="ai">1 active</Status></div><div className={`warning-item ${falseAlarm ? "muted" : ""}`}><div className="warning-title"><span className="summary-icon purple"><Icon name="spark"/></span><div><span>{falseAlarm ? "Marked false alarm" : "Latency above learned baseline"}</span><h3>CICT-LAB3-SW-02</h3><p>Latency has gradually increased by 31% over the last 2 hours. Current performance remains below the configured alert threshold.</p></div></div><div className="confidence"><span>Confidence</span><strong>Medium · 68%</strong><i><em/></i></div><div className="warning-details"><span><small>Baseline</small><strong>12–18 ms</strong></span><span><small>Current</small><strong>26 ms</strong></span><span><small>First observed</small><strong>1h 48m ago</strong></span></div><div className="warning-actions"><Button variant="secondary" icon="chart">View supporting chart</Button>{role === "Admin" && <Button variant="ghost" icon={falseAlarm ? "check" : "close"} onClick={() => setFalseAlarm(true)} disabled={falseAlarm}>{falseAlarm ? "Marked false alarm" : "Mark as false alarm"}</Button>}</div></div><div className="ai-explainer"><Icon name="spark"/><span><strong>Why this appeared</strong>Netknowing compares recent performance with this device's own historical behavior. It does not issue device commands.</span></div></article>
     <article className="card risk-card"><div className="card-head"><div><h2>Failure-risk ranking</h2><p>Maintenance planning priority</p></div><button className="link-btn">How this works</button></div>{[["CICT-FAC-AP-03","High","Recurring disconnects · 12 incidents","down",86],["CICT-LAB2-SW-01","High","Packet loss and SNMP timeouts","down",78],["CICT-LAB3-SW-02","Medium","Latency drifting above baseline","degraded",61],["CICT-LAB3-AP-06","Medium","Rising retransmission rate","degraded",54],["CICT-F2-SW-02","Medium","Power-cycle frequency","degraded",48],["CICT-SRV-01","Low","Stable recent performance","up",24]].map((r, i) => <div className="risk-row" key={r[0]}><b>{i + 1}</b><span><strong>{r[0]}</strong><small>{r[2]}</small><i><em className={r[3]} style={{width:`${r[4]}%`}}/></i></span><Status type={r[3] as "up"|"down"|"degraded"}>{r[1]}</Status></div>)}</article></section>}
   </>;
 }
 
-function Incident({ role, incident, aiOn, go }: { role: Role; incident: string; aiOn: boolean; go: (s: Screen) => void }) {
-  const [ack, setAck] = useState(false);
-  const isFac = incident === "CICT-FAC-AP-03";
-  const acknowledged = !isFac || ack;
+function Incident({ role, incident, aiOn, go, openDevice, acked, onAck, recovered, escalation }: { role: Role; incident: string; aiOn: boolean; go: (s: Screen) => void; openDevice: (name: string) => void; acked: boolean; onAck: () => void; recovered: boolean; escalation: number }) {
+  const isFac = incident === FAC_AP;
+  const acknowledged = !isFac || acked;
   const [review, setReview] = useState<"draft"|"editing"|"approved"|"edited"|"rejected">("draft");
   const [draftText, setDraftText] = useState("CICT-LAB2-SW-01 stopped responding to ICMP, SNMP and TCP health checks at 08:42 AM, interrupting connectivity for Laboratory 2.");
   const canAct = role === "Admin";
   return <>
     <button className="back-link">← Active incidents</button>
-    <PageHeader eyebrow={isFac ? "INC-2026-0417 · Active incident" : "INC-2026-0418 · Active incident"} title={isFac ? "CICT-FAC-AP-03 unreachable" : "CICT-LAB2-SW-01 unreachable"} description={`${role === "Staff" || role === "Director" ? "Read-only view · " : ""}${isFac ? "Faculty Room · Detected today at 08:16 AM" : "Laboratory 2 · Detected today at 08:42 AM"}`} actions={<><Button variant="secondary" icon="router" onClick={() => go("device")}>Open device</Button>{acknowledged ? <Status type="neutral">Acknowledged by Maria Santos{isFac ? "" : " · 08:49"}</Status> : canAct ? <Button variant="primary" icon="check" onClick={() => setAck(true)}>Acknowledge incident</Button> : <Status type="down">Unacknowledged</Status>}</>}/>
+    <PageHeader eyebrow={isFac ? "INC-2026-0417 · Active incident" : "INC-2026-0418 · Active incident"} title={isFac ? "CICT-FAC-AP-03 unreachable" : "CICT-LAB2-SW-01 unreachable"} description={`${role === "Staff" || role === "Director" ? "Read-only view · " : ""}${isFac ? "Faculty Room · Detected today at 08:16 AM" : "Laboratory 2 · Detected today at 08:42 AM"}`} actions={<><Button variant="secondary" icon="router" onClick={() => openDevice(incident)}>Open device</Button>{acknowledged ? <Status type="neutral">Acknowledged by Maria Santos{isFac ? "" : " · 08:49"}</Status> : canAct ? <Button variant="primary" icon="check" onClick={onAck}>Acknowledge incident</Button> : <Status type="down">Unacknowledged</Status>}</>}/>
     <section className="incident-page-grid"><div>
-      <article className="card incident-detail-card"><div className="card-head"><div><h2>Incident details</h2><p>Current state and impact</p></div><Status type="down">Critical</Status></div><dl className="incident-facts"><div><dt>Started</dt><dd>October 22, 2026 · {isFac ? "08:16" : "08:42"} AM</dd></div><div><dt>Duration</dt><dd>{isFac && !ack ? "04:12" : "36 minutes"}</dd></div><div><dt>Affected services</dt><dd>{isFac ? "Faculty Room network · 18 clients" : "Laboratory 2 network · 25 clients"}</dd></div><div><dt>Triggered checks</dt><dd>ICMP, SNMP, TCP/22</dd></div></dl></article>
-      <article className="card timeline-card"><div className="card-head"><div><h2>Response timeline</h2><p>Notification and escalation sequence</p></div></div><div className="timeline"><div className="done"><i><Icon name="down"/></i><span><strong>Incident detected</strong><small>{isFac ? "08:16 AM" : "08:42 AM"} · ICMP failed for 2 consecutive polls</small></span><time>00:00</time></div><div className="done"><i><Icon name="bell"/></i><span><strong>Alert sent by email and in-app</strong><small>Primary contact: Engr. Maria Santos</small></span><time>00:01</time></div><div className={acknowledged ? "done" : "current"}><i><Icon name={acknowledged ? "check" : "clock"}/></i><span><strong>{acknowledged ? "Acknowledged by Maria Santos" : "Awaiting acknowledgement"}</strong><small>{acknowledged ? (isFac ? "08:49 AM · Investigation started" : "08:49 AM · Investigation started") : "Secondary contact escalation in 04:12"}</small></span><time>{acknowledged ? "00:07" : "—"}</time></div><div><i><Icon name="check"/></i><span><strong>Resolved</strong><small>Waiting for device recovery</small></span><time>—</time></div></div></article>
+      <article className="card incident-detail-card"><div className="card-head"><div><h2>Incident details</h2><p>Current state and impact</p></div><Status type={recovered ? "up" : "down"}>{recovered ? "Resolved" : "Critical"}</Status></div><dl className="incident-facts"><div><dt>Started</dt><dd>October 22, 2026 · {isFac ? "08:16" : "08:42"} AM</dd></div><div><dt>Duration</dt><dd>{isFac && !acked ? "04:12" : "36 minutes"}</dd></div><div><dt>Affected services</dt><dd>{isFac ? "Faculty Room network · 18 clients" : "Laboratory 2 network · 25 clients"}</dd></div><div><dt>Triggered checks</dt><dd>ICMP, SNMP, TCP/22</dd></div></dl></article>
+      <article className="card timeline-card"><div className="card-head"><div><h2>Response timeline</h2><p>Notification and escalation sequence</p></div></div><div className="timeline"><div className="done"><i><Icon name="down"/></i><span><strong>Incident detected</strong><small>{isFac ? "08:16 AM" : "08:42 AM"} · ICMP failed for 2 consecutive polls</small></span><time>00:00</time></div><div className="done"><i><Icon name="bell"/></i><span><strong>Alert sent by email and in-app</strong><small>Primary contact: Engr. Maria Santos</small></span><time>00:01</time></div><div className={acknowledged ? "done" : "current"}><i><Icon name={acknowledged ? "check" : "clock"}/></i><span><strong>{acknowledged ? "Acknowledged by Maria Santos" : "Awaiting acknowledgement"}</strong><small>{acknowledged ? (isFac ? "09:19 AM · Investigation started" : "08:49 AM · Investigation started") : escalationSentence(escalation)}</small></span><time>{acknowledged ? (isFac ? "01:03" : "00:07") : "—"}</time></div><div className={recovered ? "done" : ""}><i><Icon name="check"/></i><span><strong>Resolved</strong><small>{recovered ? "09:23 AM · Device recovered after reboot" : "Waiting for device recovery"}</small></span><time>{recovered ? "01:07" : "—"}</time></div></div></article>
     </div>
     {(aiOn && role !== "Helpdesk" && role !== "Intern") && <article className="card ai-draft-card"><div className="ai-draft-head"><span><Icon name="spark"/>AI-generated draft</span><Status type={review === "rejected" ? "down" : review === "draft" || review === "editing" ? "ai" : "up"}>{review === "draft" || review === "editing" ? "Awaiting review" : review === "rejected" ? "Rejected" : "Approved"}</Status></div><h2>Incident summary</h2><div className="draft-section"><span>What happened</span>{review === "editing" ? <textarea className="draft-editor" value={draftText} onChange={(event) => setDraftText(event.target.value)}/> : <p>{draftText}</p>}</div><div className="draft-section"><span>Likely cause</span><p>Recent packet-loss increases and simultaneous check failures suggest a device power or uplink issue. This is a suggestion, not a confirmed diagnosis.</p></div><div className="draft-section"><span>Suggested checks</span><ul><li>Verify power and UPS status at the 2nd floor cabinet.</li><li>Inspect the uplink to CICT-CORE-RTR-01.</li><li>Review interface errors after connectivity returns.</li></ul></div>
       {review === "draft" && canAct && <div className="draft-actions"><Button variant="purple" icon="check" onClick={() => setReview("approved")}>Approve</Button><Button variant="secondary" icon="edit" onClick={() => setReview("editing")}>Edit</Button><Button variant="ghost" icon="close" onClick={() => setReview("rejected")}>Reject</Button></div>}
@@ -615,34 +770,76 @@ function Incident({ role, incident, aiOn, go }: { role: Role; incident: string; 
   </>;
 }
 
+const actors: Record<Role, string> = { Admin: "Maria Santos", Staff: "Paolo Cruz", Director: "Dr. Elena Reyes", Helpdesk: "Luis Garcia", Auditor: "Ana Mendoza", Intern: "Jonas Ramos · Intern" };
+
 export default function App() {
   const [screen, setScreen] = useState<Screen>("login");
   const [role, setRole] = useState<Role>("Admin");
   const [dark, setDark] = useState(false);
   const [reboot, setReboot] = useState(false);
   const [aiOn, setAiOn] = useState(true);
+  const [audible, setAudible] = useState(true);
+  const [acked, setAcked] = useState(false);
+  const [ackNotice, setAckNotice] = useState(false);
+  const [escalation, setEscalation] = useState(252);
+  const [overrides, setOverrides] = useState<Overrides>({});
   const [auditRows, setAuditRows] = useState<AuditRow[]>(initialAuditRows);
   const [incidentTarget, setIncidentTarget] = useState("CICT-LAB2-SW-01");
+  const [deviceTarget, setDeviceTarget] = useState("CICT-LAB2-SW-01");
   const startScreen = useMemo(() => role === "Auditor" ? "audit" : "dashboard", [role]);
   const navigate = (next: Screen) => {
     if (permissions[role].includes(next)) setScreen(next);
   };
   const openIncident = (name: string) => { setIncidentTarget(name); navigate("incident"); };
+  const openDevice = (name: string) => { setDeviceTarget(name); navigate("device"); };
   const addAudit = (row: AuditRow) => setAuditRows((current) => [row, ...current]);
-  const content = screen === "dashboard" ? <Dashboard role={role} go={navigate} openIncident={openIncident}/> :
-    screen === "devices" ? <Devices role={role} go={navigate}/> :
-    screen === "device" ? <DeviceDetail role={role} go={navigate} openReboot={() => setReboot(true)} onDenied={() => addAudit(["09:18:11", "Jonas Ramos · Intern", "Reboot attempt denied", "CICT-LAB2-SW-01", "denied", "Not allowed for your role"])} /> :
-    screen === "ssh" ? <SSH go={navigate} onStart={() => addAudit(["09:17:00", "Maria Santos", "SSH session started", "CICT-LAB2-SW-01", "success", "Session recorded"])} onEnd={() => addAudit(["09:18:00", "Maria Santos", "SSH session ended", "CICT-LAB2-SW-01", "success", "Session closed"])} /> :
-    screen === "history" ? <History go={navigate} openIncident={openIncident}/> :
-    screen === "reports" ? <Reports/> :
+  const device = findDevice(deviceTarget, overrides);
+  const profile = profileFor(device);
+
+  // In-app alert (FR-06): the banner and tone stay until the incident is acknowledged or the device recovers.
+  const facRecovered = overrides[FAC_AP]?.status === "Up";
+  const alertPending = screen !== "login" && permissions[role].includes("incident") && !acked && !facRecovered;
+  useAlertTone(alertPending && audible);
+  useEffect(() => {
+    if (!alertPending || escalation <= 0) return;
+    const timer = window.setTimeout(() => setEscalation((value) => value - 1), 1000);
+    return () => window.clearTimeout(timer);
+  }, [alertPending, escalation]);
+  useEffect(() => {
+    if (!ackNotice) return;
+    const timer = window.setTimeout(() => setAckNotice(false), 6000);
+    return () => window.clearTimeout(timer);
+  }, [ackNotice]);
+  const acknowledge = () => {
+    setAcked(true);
+    setAckNotice(true);
+    addAudit(["09:19:32", "Maria Santos", "Incident acknowledged", "INC-2026-0417", "success", "Acknowledged at 09:19"]);
+  };
+  const toggleAi = (value: boolean) => {
+    setAiOn(value);
+    addAudit(["09:20:41", "Maria Santos", value ? "AI features switched on" : "AI features switched off", "AI insights", "success", value ? "Early warnings, risk ranking and AI drafts resumed" : "Polling, alerting and remediation continue unchanged"]);
+  };
+  const attention = liveIncidents(overrides, aiOn).filter((item) => (role !== "Helpdesk" && role !== "Intern") || item.kind !== "ai").length;
+  const banner = screen === "login" ? null : alertPending
+    ? <AlertBanner role={role} escalation={escalation} audible={audible} onToggleSound={() => setAudible(!audible)} onAcknowledge={acknowledge} onOpen={() => openIncident(FAC_AP)}/>
+    : ackNotice && permissions[role].includes("incident")
+      ? <div className="alert-banner acknowledged" role="status"><span className="alert-banner-icon"><Icon name="check" size={20}/></span><div className="alert-banner-main"><strong>Incident acknowledged by Maria Santos · 09:19 AM</strong><span>{FAC_AP} · The audible alert has stopped and escalation to the secondary contact is cancelled.</span></div></div>
+      : null;
+
+  const content = screen === "dashboard" ? <Dashboard role={role} go={navigate} openIncident={openIncident} openDevice={openDevice} overrides={overrides} aiOn={aiOn} acked={acked} escalation={escalation}/> :
+    screen === "devices" ? <Devices role={role} go={navigate} openDevice={openDevice} overrides={overrides}/> :
+    screen === "device" ? <DeviceDetail key={deviceTarget} role={role} go={navigate} device={device} openReboot={() => setReboot(true)} openIncident={() => openIncident(deviceTarget)} onDenied={() => addAudit(["09:18:11", "Jonas Ramos · Intern", "Reboot attempt denied", deviceTarget, "denied", "Not allowed for your role"])} /> :
+    screen === "ssh" ? <SSH go={navigate} device={device} onStart={() => addAudit(["09:17:00", "Maria Santos", "SSH session started", deviceTarget, "success", "Session recorded"])} onEnd={() => addAudit(["09:18:00", "Maria Santos", "SSH session ended", deviceTarget, "success", "Session closed"])} /> :
+    screen === "history" ? <History go={navigate} openIncident={openIncident} overrides={overrides} acked={acked} aiOn={aiOn}/> :
+    screen === "reports" ? <Reports role={role} onGenerated={(type) => addAudit(["09:20:05", actors[role], "Report generated", reportData[type].title, "success", "Sample report preview · availability, incident count, MTTD, MTTR and top failing devices"])}/> :
     screen === "users" ? <Users/> :
     screen === "audit" ? <Audit rows={auditRows}/> :
-    screen === "insights" ? <Insights role={role} aiOn={aiOn} setAiOn={setAiOn}/> :
-    screen === "incident" ? <Incident role={role} incident={incidentTarget} aiOn={aiOn} go={navigate}/> :
+    screen === "insights" ? <Insights role={role} aiOn={aiOn} setAiOn={toggleAi}/> :
+    screen === "incident" ? <Incident role={role} incident={incidentTarget} aiOn={aiOn} go={navigate} openDevice={openDevice} acked={acked} onAck={acknowledge} recovered={facRecovered && incidentTarget === FAC_AP} escalation={escalation}/> :
     screen === "monitoring" ? <MonitoringSetup/> : null;
   return <div className={dark ? "dark" : ""}>
     {screen === "login" ? <Login role={role} setRole={setRole} onLogin={() => setScreen(startScreen)}/> :
-      <AppShell role={role} setRole={setRole} screen={screen} setScreen={setScreen} dark={dark} setDark={setDark} aiOn={aiOn} onLogout={() => setScreen("login")}>{content}</AppShell>}
-    {reboot && <RebootModal onClose={() => setReboot(false)} onConfirm={(reason) => addAudit(["09:04:18", "Maria Santos", "Reboot initiated", "CICT-LAB2-SW-01", "success", `Reason: ${reason} · Completed. Health check 09:06: no response.`])}/>} 
+      <AppShell role={role} setRole={setRole} screen={screen} setScreen={setScreen} dark={dark} setDark={setDark} aiOn={aiOn} attention={attention} audible={audible} setAudible={setAudible} banner={banner} openDevice={openDevice} onLogout={() => setScreen("login")}>{content}</AppShell>}
+    {reboot && <RebootModal device={device} onClose={() => setReboot(false)} onRecovered={() => setOverrides((current) => ({ ...current, [deviceTarget]: { status: "Up", latency: "12 ms" } }))} onConfirm={(reason) => addAudit([profile.rebootAt, "Maria Santos", "Reboot initiated", deviceTarget, "success", `Reason: ${reason} · Completed. Health check ${profile.checkAt}: ${profile.recovers ? "device recovered, ICMP, SNMP and TCP/22 responding" : "no response"}.`])}/>}
   </div>;
 }
