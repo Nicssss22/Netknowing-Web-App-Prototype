@@ -101,6 +101,13 @@ function Avatar({ name }: { name: string }) {
   return <span className="avatar">{name.split(" ").map((p) => p[0]).slice(0, 2).join("")}</span>;
 }
 
+function LogoImage({ decorative = false }: { decorative?: boolean }) {
+  return <img src={`${import.meta.env.BASE_URL}logo.png`} alt={decorative ? "" : "Netknowing logo"} onError={(event) => {
+    event.currentTarget.onerror = null;
+    event.currentTarget.src = `${import.meta.env.BASE_URL}netknowing-n-logo.svg`;
+  }} />;
+}
+
 function Button({ children, variant = "primary", icon, onClick, disabled, visuallyDisabled, type = "button" }: {
   children: ReactNode; variant?: "primary" | "secondary" | "ghost" | "danger" | "purple";
   icon?: IconName; onClick?: () => void; disabled?: boolean; visuallyDisabled?: boolean; type?: "button" | "submit";
@@ -135,7 +142,7 @@ function Login({ role, setRole, onLogin }: { role: Role; setRole: (r: Role) => v
   const submit = (e: FormEvent) => { e.preventDefault(); onLogin(); };
   return <main className="login-page">
     <section className="login-brand">
-      <div className="login-masthead"><div className="brand-mark large brand-mark-image"><img src="/logo.png" alt="Netknowing logo" /></div><div><strong>Netknowing</strong><span>CICT NETWORK OPERATIONS</span></div><span className="campus-edition">MAIN CAMPUS</span></div>
+      <div className="login-masthead"><div className="brand-mark large brand-mark-image"><LogoImage /></div><div><strong>Netknowing</strong><span>CICT NETWORK OPERATIONS</span></div><span className="campus-edition">MAIN CAMPUS</span></div>
       <div className="login-brand-copy">
         <span className="overline">Bulacan State University</span>
         <h1>CICT Network<br/>Operations</h1>
@@ -146,7 +153,7 @@ function Login({ role, setRole, onLogin }: { role: Role; setRole: (r: Role) => v
     </section>
     <section className="login-panel">
       <form className="login-form" onSubmit={submit}>
-        <div className="mobile-brand"><div className="brand-mark brand-mark-image"><img src="/logo.png" alt="Netknowing logo" /></div><strong>Netknowing</strong></div>
+        <div className="mobile-brand"><div className="brand-mark brand-mark-image"><LogoImage /></div><strong>Netknowing</strong></div>
         <span className="overline blue">Personnel access</span>
         <h2>Sign in to Netknowing</h2>
         <p>Use your assigned CICT account to enter the console.</p>
@@ -178,7 +185,7 @@ function AppShell({ role, setRole, screen, setScreen, dark, setDark, aiOn, child
   };
   return <div className="app-shell">
     <aside className={`sidebar ${mobileOpen ? "sidebar-open" : ""}`}>
-      <div className="brand"><div className="brand-mark brand-mark-image"><img src="/logo.png" alt="Netknowing logo" /></div><div><strong>Netknowing</strong><small>CICT Network Operations</small></div></div>
+      <div className="brand"><div className="brand-mark brand-mark-image"><LogoImage /></div><div><strong>Netknowing</strong><small>CICT Network Operations</small></div></div>
       <div className="campus-context"><Icon name="pin" size={15}/><div><strong>CICT Main Campus</strong><small>Bulacan State University</small></div></div>
       <nav>
         <span className="nav-label">Workspace</span>
@@ -193,7 +200,11 @@ function AppShell({ role, setRole, screen, setScreen, dark, setDark, aiOn, child
     <div className="main-shell">
       <header className="topbar">
         <button className="mobile-menu" onClick={() => setMobileOpen(true)}><Icon name="menu"/></button>
-        <div className="global-search"><Icon name="search"/><input value={search} onChange={(event) => setSearch(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && search.trim()) { const target: Screen = /CICT-|10\.20\./i.test(search) ? "device" : "history"; setScreen(permissions[role].includes(target) ? target : "history"); setSearch(""); } }} placeholder="Search devices, incidents, locations…"/><kbd>Enter</kbd></div>
+      <div className="mobile-topbar-brand" aria-label="Netknowing">
+        <div className="brand-mark brand-mark-image"><LogoImage decorative /></div>
+        <strong>Netknowing</strong>
+      </div>
+      <div className="global-search"><Icon name="search"/><input value={search} onChange={(event) => setSearch(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && search.trim()) { const target: Screen = /CICT-|10\.20\./i.test(search) ? "device" : "history"; setScreen(permissions[role].includes(target) ? target : "history"); setSearch(""); } }} placeholder="Search devices, incidents, locations…"/><kbd>Enter</kbd></div>
         <div className="top-actions">
           <button className={`icon-btn ${audible ? "audible" : ""}`} aria-label={`Audible alerts ${audible ? "on" : "off"}`} aria-pressed={audible} onClick={() => setAudible(!audible)}><Icon name="volume" size={17}/>{audible && <span/>}</button>
           <button className="icon-btn" aria-label="Open active incident" onClick={() => permissions[role].includes("incident") && setScreen("incident")}><Icon name="bell"/><b>3</b></button>
