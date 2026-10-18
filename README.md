@@ -1,4 +1,4 @@
-# Netknowing Web App Prototype
+# Netknowing Web App Prototype 
 
 A React and Vite front-end prototype for the Netknowing network monitoring system. The app uses sample data; it does not connect to real campus devices or send email alerts.
 
