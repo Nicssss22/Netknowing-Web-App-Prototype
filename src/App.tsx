@@ -135,7 +135,7 @@ function Login({ role, setRole, onLogin }: { role: Role; setRole: (r: Role) => v
   const submit = (e: FormEvent) => { e.preventDefault(); onLogin(); };
   return <main className="login-page">
     <section className="login-brand">
-      <div className="login-masthead"><div className="brand-mark large brand-mark-image"><img src="/netknowing-n-logo.svg" alt="Netknowing logo" /></div><div><strong>Netknowing</strong><span>CICT NETWORK OPERATIONS</span></div><span className="campus-edition">MAIN CAMPUS</span></div>
+      <div className="login-masthead"><div className="brand-mark large brand-mark-image"><img src="/logo.png" alt="Netknowing logo" /></div><div><strong>Netknowing</strong><span>CICT NETWORK OPERATIONS</span></div><span className="campus-edition">MAIN CAMPUS</span></div>
       <div className="login-brand-copy">
         <span className="overline">Bulacan State University</span>
         <h1>CICT Network<br/>Operations</h1>
@@ -146,7 +146,7 @@ function Login({ role, setRole, onLogin }: { role: Role; setRole: (r: Role) => v
     </section>
     <section className="login-panel">
       <form className="login-form" onSubmit={submit}>
-        <div className="mobile-brand"><div className="brand-mark brand-mark-image"><img src="/netknowing-n-logo.svg" alt="Netknowing logo" /></div><strong>Netknowing</strong></div>
+        <div className="mobile-brand"><div className="brand-mark brand-mark-image"><img src="/logo.png" alt="Netknowing logo" /></div><strong>Netknowing</strong></div>
         <span className="overline blue">Personnel access</span>
         <h2>Sign in to Netknowing</h2>
         <p>Use your assigned CICT account to enter the console.</p>
@@ -178,7 +178,7 @@ function AppShell({ role, setRole, screen, setScreen, dark, setDark, aiOn, child
   };
   return <div className="app-shell">
     <aside className={`sidebar ${mobileOpen ? "sidebar-open" : ""}`}>
-      <div className="brand"><div className="brand-mark brand-mark-image"><img src="/netknowing-n-logo.svg" alt="Netknowing logo" /></div><div><strong>Netknowing</strong><small>CICT Network Operations</small></div></div>
+      <div className="brand"><div className="brand-mark brand-mark-image"><img src="/logo.png" alt="Netknowing logo" /></div><div><strong>Netknowing</strong><small>CICT Network Operations</small></div></div>
       <div className="campus-context"><Icon name="pin" size={15}/><div><strong>CICT Main Campus</strong><small>Bulacan State University</small></div></div>
       <nav>
         <span className="nav-label">Workspace</span>
