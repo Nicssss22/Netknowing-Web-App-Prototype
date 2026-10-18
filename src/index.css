@@ -96,7 +96,8 @@ kbd { font: 10px Inter; background:var(--surface); color:var(--faint); border:1p
 .audible span { position:absolute; right:5px; bottom:5px; width:5px; height:5px; border-radius:50%; background:var(--green); }
 .role-picker { position:relative; }
 .profile-button { height:44px; min-width:190px; border:0; border-left:1px solid var(--line); margin-left:5px; padding:0 0 0 13px; background:transparent; display:flex; gap:9px; align-items:center; color:var(--text); text-align:left; }
-.profile-button > span { display:flex; flex:1; flex-direction:column; gap:2px; }
+.profile-button > span:not(.avatar) { display:flex; flex:1; flex-direction:column; gap:2px; }
+.profile-button > .avatar { flex:0 0 auto; display:grid; }
 .profile-button small { font-size:9px; text-transform:uppercase; color:var(--muted); letter-spacing:.08em; }
 .profile-button strong { font-size:12px; }
 .avatar { width:32px; height:32px; border-radius:4px; background:var(--blue-soft); color:var(--blue); display:grid; place-items:center; font-size:10px; font-weight:700; flex:0 0 auto; }
