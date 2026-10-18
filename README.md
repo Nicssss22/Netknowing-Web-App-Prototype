@@ -46,6 +46,14 @@ corepack pnpm format
 - `preview` serves the production build locally after running `build`.
 - `format` formats the project files with Oxfmt.
 
+## GitHub Pages deployment
+
+This repository deploys GitHub Pages from the workflow in `.github/workflows/deploy-pages.yml`, which uploads the Vite `dist/` artifact.
+
+One-time repository setting required:
+
+- **Settings → Pages → Build and deployment → Source = GitHub Actions**
+
 ## Prototype notes
 
 The screens and values are illustrative sample data. Device polling, email delivery, persistent user and audit records, real SSH or reboot actions, and AI model integration are not connected in this prototype.
