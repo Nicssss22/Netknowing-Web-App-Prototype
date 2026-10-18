@@ -22,6 +22,43 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Verify Pages source is GitHub Actions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import sys
+          import urllib.request
+
+          repository = os.environ["GITHUB_REPOSITORY"]
+          token = os.environ["GH_TOKEN"]
+          request = urllib.request.Request(
+              f"https://api.github.com/repos/{repository}/pages",
+              headers={
+                  "Authorization": "Bearer " + token,
+                  "Accept": "application/vnd.github+json",
+                  "X-GitHub-Api-Version": "2022-11-28",
+              },
+          )
+
+          try:
+              with urllib.request.urlopen(request) as response:
+                  pages = json.load(response)
+          except Exception as error:
+              print(f"Unable to read Pages configuration: {error}")
+              sys.exit(1)
+
+          build_type = pages.get("build_type")
+          if build_type != "workflow":
+              print("GitHub Pages source must be set to 'GitHub Actions'.")
+              print(f"Current Pages build_type is: {build_type!r}")
+              sys.exit(1)
+
+          print("Pages source is correctly set to GitHub Actions.")
+          PY
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
 
@@ -36,6 +73,30 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Verify Pages build artifact
+        run: |
+          test -f dist/index.html
+
+          if grep -q 'src/main.tsx' dist/index.html; then
+            echo "dist/index.html still references src/main.tsx"
+            exit 1
+          fi
+
+          if grep -q '%BASE_URL%' dist/index.html; then
+            echo "dist/index.html still contains a literal %BASE_URL%"
+            exit 1
+          fi
+
+          if ! grep -Eq '/Netknowing-Web-App-Prototype/assets/[^"]+\.js' dist/index.html; then
+            echo "dist/index.html is missing the compiled /Netknowing-Web-App-Prototype/assets/*.js script reference"
+            exit 1
+          fi
+
+          if ! compgen -G 'dist/assets/*.js' > /dev/null; then
+            echo "dist/assets/*.js was not generated"
+            exit 1
+          fi
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
