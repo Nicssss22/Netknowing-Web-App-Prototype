@@ -959,6 +959,16 @@ footer, footer span { font-size: 11px; }
 .empty-message { padding:20px; color:var(--muted); text-align:center; }
 .draft-editor { width:100%; min-height:90px; padding:10px; border:1px solid var(--line-strong); border-radius:6px; background:var(--surface); color:var(--text); resize:vertical; font:inherit; line-height:1.6; }
 .draft-editor:focus { outline:2px solid color-mix(in srgb,var(--purple) 35%,transparent); border-color:var(--purple); }
+.zone { z-index:4; background:color-mix(in srgb,var(--surface-2) 88%,transparent); padding:3px 6px; }
+.z1 { top:4%; }.z2 { top:32%; }.z3 { top:64%; }
+.range-tabs { display:flex; gap:4px; padding:14px 16px 4px; flex-wrap:wrap; }
+.range-tabs .btn { min-height:30px; padding:0 8px; font-size:10px; }
+.availability-stat { padding:14px 16px 18px; display:flex; align-items:baseline; gap:7px; }
+.availability-stat strong { font-size:26px; color:var(--green); }
+.availability-stat span { color:var(--muted); font-size:10px; }
+.threshold-form { padding:18px 19px; }
+.btn-disabled { cursor:not-allowed; opacity:.52; }
+.audit-head, .audit-row { grid-template-columns:100px 1.1fr 1.2fr 1.2fr 85px 1.8fr; }
 @media (max-width: 760px) {
   .report-period { width:100%; }
   .report-period select { width:100%; }
