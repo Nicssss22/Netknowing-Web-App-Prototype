@@ -1045,3 +1045,7 @@ footer, footer span { font-size: 11px; }
   .modal-card.report-sheet { box-shadow:none; border:0; margin:0; width:100%; }
   .report-sheet .modal-actions, .report-sheet .modal-close, .report-type { display:none; }
 }
+
+.row-actions { display: flex; justify-content: flex-end; gap: 6px; }
+.icon-btn.delete-btn:hover { color: var(--red); background: var(--red-soft); }
+.icon-btn.delete-btn[aria-disabled="true"] { opacity: .45; }
