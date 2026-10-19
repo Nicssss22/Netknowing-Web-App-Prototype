@@ -49,7 +49,7 @@ type IconName =
   | "bell" | "volume" | "chevron" | "router" | "switch" | "wifi" | "server"
   | "check" | "warning" | "down" | "eye" | "download" | "calendar" | "filter"
   | "terminal" | "refresh" | "close" | "arrow" | "menu" | "sun" | "moon"
-  | "lock" | "pin" | "activity" | "plus" | "edit" | "info" | "logout";
+  | "lock" | "pin" | "activity" | "plus" | "edit" | "info" | "logout" | "trash";
 
 function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
   const paths: Partial<Record<IconName, ReactNode>> = {
@@ -63,6 +63,7 @@ function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
     bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></>,
     volume: <><path d="M4 10v4h4l5 4V6l-5 4H4Z"/><path d="M17 9a4 4 0 0 1 0 6m2-9a8 8 0 0 1 0 12"/></>,
     chevron: <path d="m8 10 4 4 4-4"/>,
+    trash: <><path d="M4 7h16M10 11v6m4-6v6M6 7l1 13h10l1-13M9 7V4h6v3"/></>,
     router: <><rect x="3" y="8" width="18" height="10" rx="2"/><path d="M7 12h.01M11 12h.01M17 14h.01M5 4l3 4m11-4-3 4"/></>,
     switch: <><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h2m2 0h2m2 0h2M7 14h2m2 0h6"/></>,
     wifi: <><path d="M4 9a12 12 0 0 1 16 0M7 12.5a7.5 7.5 0 0 1 10 0M10 16a3 3 0 0 1 4 0"/><circle cx="12" cy="19" r=".5" fill="currentColor"/></>,
@@ -679,8 +680,9 @@ const users = [
   ["Jonas Ramos", "Intern", "Not enabled", "Today, 08:30", "Active", "Dec 18, 2026"],
 ];
 
-function Users() {
+function Users({ currentUser, onAudit }: { currentUser: string; onAudit: (row: AuditRow) => void }) {
   const [dialog, setDialog] = useState<"add" | "edit" | null>(null);
+  const [deleteIndex, setDeleteIndex] = useState<number | null>(null);
   const [userRows, setUserRows] = useState(users);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [form, setForm] = useState({ name: "", email: "", role: "Staff", status: "Active", expiry: "", twoFactor: false });
@@ -700,10 +702,21 @@ function Users() {
     setUserRows((current) => dialog === "add" ? [...current, record] : current.map((user, index) => index === selectedIndex ? record : user));
     setDialog(null);
   };
+  // Only the network administrator reaches this page (Table 1). Guard the signed-in account and the last administrator so access cannot be lost.
+  const deleteBlock = (index: number) => userRows[index][0] === currentUser ? "You cannot delete the account you are signed in with."
+    : userRows[index][1] === "Administrator" && userRows.filter((user) => user[1] === "Administrator").length < 2 ? "At least one administrator account must remain." : "";
+  const deleteUser = () => {
+    if (deleteIndex === null || deleteBlock(deleteIndex)) return;
+    const user = userRows[deleteIndex];
+    setUserRows((current) => current.filter((_, index) => index !== deleteIndex));
+    onAudit(["09:21:36", currentUser, "User account deleted", user[0], "success", `${user[1]} account removed from the User Accounts DB`]);
+    setDeleteIndex(null);
+  };
   return <>
     <PageHeader eyebrow="Administration" title="User & role management" description="Manage account access, roles and authentication settings." actions={<Button icon="plus" onClick={openAdd}>Add user</Button>}/>
     <div className="admin-stats"><span><strong>{userRows.filter((user) => user[4] === "Active").length}</strong> Active users</span><span><strong>{userRows.filter((user) => user[2] === "Enabled").length}</strong> 2FA enabled</span><span><strong>{userRows.filter((user) => user[5] !== "—").length}</strong> Expiring accounts</span></div>
-    <article className="card table-card"><div className="table-scroll"><table><thead><tr><th>User</th><th>Role</th><th>2FA status</th><th>Last login</th><th>Account status</th><th>Expiry date</th><th/></tr></thead><tbody>{userRows.map((u, index) => <tr key={`${u[0]}-${index}`}><td><div className="user-cell"><Avatar name={u[0]}/><span><strong>{u[0]}</strong><small>{u[6] ?? `${u[0].toLowerCase().replaceAll(" ", ".")}@bulsu.edu.ph`}</small></span></div></td><td>{u[1]}</td><td><Status type={u[2] === "Enabled" ? "up" : "neutral"}>{u[2]}</Status></td><td>{u[3]}</td><td><Status type={u[4] === "Active" ? "up" : "down"}>{u[4]}</Status></td><td>{u[5]}</td><td><button className="icon-btn" aria-label={`Edit ${u[0]}`} onClick={() => openEdit(index)}><Icon name="edit"/></button></td></tr>)}</tbody></table></div></article>
+    <article className="card table-card"><div className="table-scroll"><table><thead><tr><th>User</th><th>Role</th><th>2FA status</th><th>Last login</th><th>Account status</th><th>Expiry date</th><th/></tr></thead><tbody>{userRows.map((u, index) => <tr key={`${u[0]}-${index}`}><td><div className="user-cell"><Avatar name={u[0]}/><span><strong>{u[0]}</strong><small>{u[6] ?? `${u[0].toLowerCase().replaceAll(" ", ".")}@bulsu.edu.ph`}</small></span></div></td><td>{u[1]}</td><td><Status type={u[2] === "Enabled" ? "up" : "neutral"}>{u[2]}</Status></td><td>{u[3]}</td><td><Status type={u[4] === "Active" ? "up" : "down"}>{u[4]}</Status></td><td>{u[5]}</td><td><div className="row-actions"><button className="icon-btn" aria-label={`Edit ${u[0]}`} onClick={() => openEdit(index)}><Icon name="edit"/></button><button className="icon-btn delete-btn" aria-label={`Delete ${u[0]}`} title={deleteBlock(index) || `Delete ${u[0]}`} aria-disabled={Boolean(deleteBlock(index))} onClick={() => setDeleteIndex(index)}><Icon name="trash"/></button></div></td></tr>)}</tbody></table></div></article>
+    {deleteIndex !== null && <div className="modal-layer"><div className="modal-card" role="dialog" aria-modal="true" aria-label={`Delete ${userRows[deleteIndex][0]}`}><div className="modal-icon danger"><Icon name="trash" size={24}/></div><button className="modal-close" aria-label="Close" onClick={() => setDeleteIndex(null)}><Icon name="close"/></button><span className="overline red">Account access · sample data only</span><h2>Delete {userRows[deleteIndex][0]}?</h2><p>This removes the {userRows[deleteIndex][1]} account and its sign-in access. The deletion is recorded in the audit trail.</p>{deleteBlock(deleteIndex) && <div className="impact-box"><strong><Icon name="warning"/> Cannot delete this account</strong><p>{deleteBlock(deleteIndex)}</p></div>}<div className="modal-actions"><Button variant="secondary" onClick={() => setDeleteIndex(null)}>Cancel</Button><Button variant="danger" icon="trash" disabled={Boolean(deleteBlock(deleteIndex))} onClick={deleteUser}>Delete user</Button></div></div></div>}
     {dialog && <div className="modal-layer"><form className="modal-card user-modal" onSubmit={saveUser}><button type="button" className="modal-close" onClick={() => setDialog(null)}><Icon name="close"/></button><span className="overline blue">Account access · sample data only</span><h2>{dialog === "add" ? "Add a new user" : "Edit user"}</h2><p>Assign the minimum access required for this user.</p><div className="form-grid"><label>Full name<input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="Full name"/></label><label>Email address<input required type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} placeholder="name@bulsu.edu.ph"/></label><label>Role<select value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })}>{roles.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}</select></label><label>Account status<select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}><option>Active</option><option>Suspended</option></select></label><label className="full">Account expiry <small>Recommended for Intern accounts</small><input type="date" value={form.expiry} onChange={(event) => setForm({ ...form, expiry: event.target.value })}/></label><label className="check-label full"><input type="checkbox" checked={form.twoFactor} onChange={(event) => setForm({ ...form, twoFactor: event.target.checked })}/> Require two-factor authentication</label></div><div className="modal-actions"><Button variant="secondary" onClick={() => setDialog(null)}>Cancel</Button><Button type="submit">{dialog === "add" ? "Add user" : "Save changes"}</Button></div></form></div>}
   </>;
 }
@@ -832,7 +845,7 @@ export default function App() {
     screen === "ssh" ? <SSH go={navigate} device={device} onStart={() => addAudit(["09:17:00", "Maria Santos", "SSH session started", deviceTarget, "success", "Session recorded"])} onEnd={() => addAudit(["09:18:00", "Maria Santos", "SSH session ended", deviceTarget, "success", "Session closed"])} /> :
     screen === "history" ? <History go={navigate} openIncident={openIncident} overrides={overrides} acked={acked} aiOn={aiOn}/> :
     screen === "reports" ? <Reports role={role} onGenerated={(type) => addAudit(["09:20:05", actors[role], "Report generated", reportData[type].title, "success", "Sample report preview · availability, incident count, MTTD, MTTR and top failing devices"])}/> :
-    screen === "users" ? <Users/> :
+    screen === "users" ? <Users currentUser={actors[role]} onAudit={addAudit}/> :
     screen === "audit" ? <Audit rows={auditRows}/> :
     screen === "insights" ? <Insights role={role} aiOn={aiOn} setAiOn={toggleAi}/> :
     screen === "incident" ? <Incident role={role} incident={incidentTarget} aiOn={aiOn} go={navigate} openDevice={openDevice} acked={acked} onAck={acknowledge} recovered={facRecovered && incidentTarget === FAC_AP} escalation={escalation}/> :
