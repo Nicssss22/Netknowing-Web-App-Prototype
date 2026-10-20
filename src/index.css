@@ -1049,3 +1049,10 @@ footer, footer span { font-size: 11px; }
 .row-actions { display: flex; justify-content: flex-end; gap: 6px; }
 .icon-btn.delete-btn:hover { color: var(--red); background: var(--red-soft); }
 .icon-btn.delete-btn[aria-disabled="true"] { opacity: .45; }
+
+.supporting-chart { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+.supporting-chart .card-head { padding: 0 0 6px; }
+.supporting-chart h3 { margin: 0; font-size: 13px; }
+.supporting-chart .chart-legend { padding: 0 0 4px; }
+.baseline-band { fill: var(--blue); opacity: .12; }
+.baseline-swatch { display: block; width: 20px; height: 10px; border-radius: 2px; background: var(--blue); opacity: .25; }
