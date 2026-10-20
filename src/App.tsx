@@ -707,9 +707,7 @@ function Users({ currentUser, onAudit }: { currentUser: string; onAudit: (row: A
     : userRows[index][1] === "Administrator" && userRows.filter((user) => user[1] === "Administrator").length < 2 ? "At least one administrator account must remain." : "";
   const deleteUser = () => {
     if (deleteIndex === null || deleteBlock(deleteIndex)) return;
-    const user = userRows[deleteIndex];
     setUserRows((current) => current.filter((_, index) => index !== deleteIndex));
-    onAudit(["09:21:36", currentUser, "User account deleted", user[0], "success", `${user[1]} account removed from the User Accounts DB`]);
     setDeleteIndex(null);
   };
   return <>
@@ -734,28 +732,67 @@ const initialAuditRows: AuditRow[] = [
   ["Oct 20, 11:04", "Unknown user", "Sign-in attempt denied", "Web console · 103.21.4.18", "denied", "Invalid credentials"],
 ];
 
+// The sample "today" is 22 October 2026. Audit times read "09:04:18" (today), "Yesterday, 16:38" or "Oct 20, 11:04".
+const sampleToday = new Date(2026, 9, 22);
+const monthIndex = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function auditDaysAgo(time: string) {
+  if (!time.includes(",")) return 0;
+  const day = time.split(",")[0].trim();
+  if (day === "Yesterday") return 1;
+  const [month, date] = day.split(" ");
+  const when = new Date(sampleToday.getFullYear(), monthIndex.indexOf(month), Number(date));
+  return Math.round((sampleToday.getTime() - when.getTime()) / 86400000);
+}
+
 function Audit({ rows }: { rows: AuditRow[] }) {
   const [query, setQuery] = useState("");
   const [action, setAction] = useState("All actions");
+  const [dates, setDates] = useState("All sample dates");
   const filteredRows = rows.filter((row) => {
     const matchesQuery = row.join(" ").toLowerCase().includes(query.toLowerCase());
     const matchesAction = action === "All actions" || (action === "Denied attempts" ? row[4] === "denied" : row[2].includes("Reboot") || row[2].includes("SSH"));
-    return matchesQuery && matchesAction;
+    const daysAgo = auditDaysAgo(row[0]);
+    const matchesDate = dates === "All sample dates" || (dates === "Today" ? daysAgo === 0 : daysAgo <= 7);
+    return matchesQuery && matchesAction && matchesDate;
   });
   return <>
     <PageHeader eyebrow="Governance" title="Audit trail" description="Immutable record of access and administrative actions." actions={<Button variant="secondary" icon="download" onClick={() => downloadCsv("netknowing-audit.csv", [["Time", "User", "Action", "Target", "Result", "Details"], ...filteredRows])}>Export audit log</Button>}/>
-    <div className="filter-bar"><div className="search-field"><Icon name="search"/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search user, action or target"/></div><label><Icon name="filter"/><select value={action} onChange={(event) => setAction(event.target.value)}><option>All actions</option><option>Denied attempts</option><option>Remote actions</option></select></label><label><Icon name="calendar"/><select><option>All sample dates</option><option>Today</option><option>Last 7 days</option></select></label></div>
+    <div className="filter-bar"><div className="search-field"><Icon name="search"/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search user, action or target"/></div><label><Icon name="filter"/><select value={action} onChange={(event) => setAction(event.target.value)}><option>All actions</option><option>Denied attempts</option><option>Remote actions</option></select></label><label><Icon name="calendar"/><select value={dates} onChange={(event) => setDates(event.target.value)}><option>All sample dates</option><option>Today</option><option>Last 7 days</option></select></label></div>
     <article className="card audit-card"><div className="audit-head"><span>Time</span><span>User</span><span>Action</span><span>Target</span><span>Result</span><span>Details</span></div>{filteredRows.map((r, index) => <div className={`audit-row ${r[4]}`} key={`${index}-${r.join()}`}><time>{r[0]}</time><div className="user-cell"><Avatar name={r[1]}/><strong>{r[1]}</strong></div><span><i className={`audit-icon ${r[4]}`}><Icon name={r[4] === "denied" ? "shield" : r[2].includes("SSH") ? "terminal" : r[2].includes("Reboot") ? "refresh" : "check"}/></i>{r[2]}</span><span>{r[3]}</span><Status type={r[4] === "denied" ? "down" : "up"}>{r[4] === "denied" ? "Denied" : "Completed"}</Status><span>{r[5]}</span></div>)}{filteredRows.length === 0 && <p className="empty-message">No audit events match these filters.</p>}</article>
   </>;
 }
 
+// Sample latency readings for CICT-LAB3-SW-02 over the last 2 hours (one every 10 minutes), drifting from ~20 ms up to the current 26 ms.
+const driftSamples = [19.8, 19.5, 20.4, 21.2, 21.0, 22.6, 23.4, 23.8, 24.9, 25.3, 25.1, 26.2, 26.0];
+const baselineRange = { low: 12, high: 18 };
+
+function SupportingChart({ device }: { device: string }) {
+  const toY = (ms: number) => 160 - ms * 3.5;
+  const line = driftSamples.map((ms, index) => `${index ? "L" : "M"}${index * 50} ${toY(ms).toFixed(1)}`).join(" ");
+  return <div className="supporting-chart" role="group" aria-label={`Supporting chart for ${device}`}>
+    <div className="card-head"><div><h3>Latency vs learned baseline · last 2 hours</h3><p>{device} · ICMP response time (sample data)</p></div><strong className="metric">26 <small>ms now</small></strong></div>
+    <div className="chart-wrap">
+      <div className="chart-y"><span>40 ms</span><span>20 ms</span><span>0</span></div>
+      <svg viewBox="0 0 600 170" preserveAspectRatio="none" className="line-chart" role="img" aria-label="Latency has risen from about 20 ms to 26 ms, above the 12 to 18 ms baseline">
+        <path className="gridline" d="M0 20h600M0 90h600M0 160h600"/>
+        <rect className="baseline-band" x="0" y={toY(baselineRange.high)} width="600" height={toY(baselineRange.low) - toY(baselineRange.high)}/>
+        <path className="data-line blue-line" d={line}/>
+      </svg>
+      <div className="chart-x"><span>2 h ago</span><span>1 h ago</span><span>Now</span></div>
+    </div>
+    <div className="chart-legend"><span><i className="line blue"/>Latency</span><span><i className="baseline-swatch"/>Learned baseline {baselineRange.low}–{baselineRange.high} ms</span></div>
+  </div>;
+}
+
 function Insights({ role, aiOn, setAiOn }: { role: Role; aiOn: boolean; setAiOn: (value: boolean) => void }) {
   const [falseAlarm, setFalseAlarm] = useState(false);
+  const [showChart, setShowChart] = useState(false);
   return <>
     <PageHeader eyebrow="Assisted monitoring" title="AI insights" description={`${role === "Staff" || role === "Director" ? "Read-only view · " : ""}Pattern-based early warnings and maintenance prioritization.`} actions={role === "Admin" ? <label className="toggle-wrap"><span>AI features</span><button className={`toggle ${aiOn ? "on" : ""}`} onClick={() => setAiOn(!aiOn)}><i/></button><strong>{aiOn ? "On" : "Off"}</strong></label> : <Status type="ai">AI monitoring on</Status>}/>
     <div className="ai-principle"><Icon name="info"/><span>The ranking guides maintenance planning and does not predict when a device will fail. Nothing on this page acts on a device by itself.</span></div>
     {!aiOn ? <><div className="permission-banner"><Icon name="info"/><span>AI features are off. Monitoring, alerts, and remediation continue as normal.</span></div><article className="card empty-state"><span className="summary-icon purple"><Icon name="spark"/></span><h2>AI features are off</h2><p>Early warnings, risk rankings and AI incident drafts are paused. The AI never sends commands to a device, on or off.</p><div className="still-running" aria-label="Services still running"><span><Icon name="check" size={14}/>Polling</span><span><Icon name="check" size={14}/>Alerting</span><span><Icon name="check" size={14}/>Remote remediation</span></div>{role === "Admin" ? <Button variant="purple" onClick={() => setAiOn(true)}>Turn AI features on</Button> : <Status type="neutral">Only an administrator can turn AI features on</Status>}</article></> :
-    <section className="insights-grid"><article className="card warning-card"><div className="card-head"><div><h2>Early warnings</h2><p>Signals that may need closer observation</p></div><Status type="ai">1 active</Status></div><div className={`warning-item ${falseAlarm ? "muted" : ""}`}><div className="warning-title"><span className="summary-icon purple"><Icon name="spark"/></span><div><span>{falseAlarm ? "Marked false alarm" : "Latency above learned baseline"}</span><h3>CICT-LAB3-SW-02</h3><p>Latency has gradually increased by 31% over the last 2 hours. Current performance remains below the configured alert threshold.</p></div></div><div className="confidence"><span>Confidence</span><strong>Medium · 68%</strong><i><em/></i></div><div className="warning-details"><span><small>Baseline</small><strong>12–18 ms</strong></span><span><small>Current</small><strong>26 ms</strong></span><span><small>First observed</small><strong>1h 48m ago</strong></span></div><div className="warning-actions"><Button variant="secondary" icon="chart">View supporting chart</Button>{role === "Admin" && <Button variant="ghost" icon={falseAlarm ? "check" : "close"} onClick={() => setFalseAlarm(true)} disabled={falseAlarm}>{falseAlarm ? "Marked false alarm" : "Mark as false alarm"}</Button>}</div></div><div className="ai-explainer"><Icon name="spark"/><span><strong>Why this appeared</strong>Netknowing compares recent performance with this device's own historical behavior. It does not issue device commands.</span></div></article>
+    <section className="insights-grid"><article className="card warning-card"><div className="card-head"><div><h2>Early warnings</h2><p>Signals that may need closer observation</p></div><Status type="ai">1 active</Status></div><div className={`warning-item ${falseAlarm ? "muted" : ""}`}><div className="warning-title"><span className="summary-icon purple"><Icon name="spark"/></span><div><span>{falseAlarm ? "Marked false alarm" : "Latency above learned baseline"}</span><h3>CICT-LAB3-SW-02</h3><p>Latency has gradually increased by 31% over the last 2 hours. Current performance remains below the configured alert threshold.</p></div></div><div className="confidence"><span>Confidence</span><strong>Medium · 68%</strong><i><em/></i></div><div className="warning-details"><span><small>Baseline</small><strong>12–18 ms</strong></span><span><small>Current</small><strong>26 ms</strong></span><span><small>First observed</small><strong>1h 48m ago</strong></span></div><div className="warning-actions"><button className="btn btn-secondary" type="button" aria-expanded={showChart} onClick={() => setShowChart(!showChart)}><Icon name="chart" size={16}/> {showChart ? "Hide supporting chart" : "View supporting chart"}</button>{role === "Admin" && <Button variant="ghost" icon={falseAlarm ? "check" : "close"} onClick={() => setFalseAlarm(true)} disabled={falseAlarm}>{falseAlarm ? "Marked false alarm" : "Mark as false alarm"}</Button>}</div>{showChart && <SupportingChart device="CICT-LAB3-SW-02"/>}</div><div className="ai-explainer"><Icon name="spark"/><span><strong>Why this appeared</strong>Netknowing compares recent performance with this device's own historical behavior. It does not issue device commands.</span></div></article>
     <article className="card risk-card"><div className="card-head"><div><h2>Failure-risk ranking</h2><p>Maintenance planning priority</p></div><button className="link-btn">How this works</button></div>{[["CICT-FAC-AP-03","High","Recurring disconnects · 12 incidents","down",86],["CICT-LAB2-SW-01","High","Packet loss and SNMP timeouts","down",78],["CICT-LAB3-SW-02","Medium","Latency drifting above baseline","degraded",61],["CICT-LAB3-AP-06","Medium","Rising retransmission rate","degraded",54],["CICT-F2-SW-02","Medium","Power-cycle frequency","degraded",48],["CICT-SRV-01","Low","Stable recent performance","up",24]].map((r, i) => <div className="risk-row" key={r[0]}><b>{i + 1}</b><span><strong>{r[0]}</strong><small>{r[2]}</small><i><em className={r[3]} style={{width:`${r[4]}%`}}/></i></span><Status type={r[3] as "up"|"down"|"degraded"}>{r[1]}</Status></div>)}</article></section>}
   </>;
 }
