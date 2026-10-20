@@ -732,17 +732,33 @@ const initialAuditRows: AuditRow[] = [
   ["Oct 20, 11:04", "Unknown user", "Sign-in attempt denied", "Web console · 103.21.4.18", "denied", "Invalid credentials"],
 ];
 
+// The sample "today" is 22 October 2026. Audit times read "09:04:18" (today), "Yesterday, 16:38" or "Oct 20, 11:04".
+const sampleToday = new Date(2026, 9, 22);
+const monthIndex = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+function auditDaysAgo(time: string) {
+  if (!time.includes(",")) return 0;
+  const day = time.split(",")[0].trim();
+  if (day === "Yesterday") return 1;
+  const [month, date] = day.split(" ");
+  const when = new Date(sampleToday.getFullYear(), monthIndex.indexOf(month), Number(date));
+  return Math.round((sampleToday.getTime() - when.getTime()) / 86400000);
+}
+
 function Audit({ rows }: { rows: AuditRow[] }) {
   const [query, setQuery] = useState("");
   const [action, setAction] = useState("All actions");
+  const [dates, setDates] = useState("All sample dates");
   const filteredRows = rows.filter((row) => {
     const matchesQuery = row.join(" ").toLowerCase().includes(query.toLowerCase());
     const matchesAction = action === "All actions" || (action === "Denied attempts" ? row[4] === "denied" : row[2].includes("Reboot") || row[2].includes("SSH"));
-    return matchesQuery && matchesAction;
+    const daysAgo = auditDaysAgo(row[0]);
+    const matchesDate = dates === "All sample dates" || (dates === "Today" ? daysAgo === 0 : daysAgo <= 7);
+    return matchesQuery && matchesAction && matchesDate;
   });
   return <>
     <PageHeader eyebrow="Governance" title="Audit trail" description="Immutable record of access and administrative actions." actions={<Button variant="secondary" icon="download" onClick={() => downloadCsv("netknowing-audit.csv", [["Time", "User", "Action", "Target", "Result", "Details"], ...filteredRows])}>Export audit log</Button>}/>
-    <div className="filter-bar"><div className="search-field"><Icon name="search"/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search user, action or target"/></div><label><Icon name="filter"/><select value={action} onChange={(event) => setAction(event.target.value)}><option>All actions</option><option>Denied attempts</option><option>Remote actions</option></select></label><label><Icon name="calendar"/><select><option>All sample dates</option><option>Today</option><option>Last 7 days</option></select></label></div>
+    <div className="filter-bar"><div className="search-field"><Icon name="search"/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search user, action or target"/></div><label><Icon name="filter"/><select value={action} onChange={(event) => setAction(event.target.value)}><option>All actions</option><option>Denied attempts</option><option>Remote actions</option></select></label><label><Icon name="calendar"/><select value={dates} onChange={(event) => setDates(event.target.value)}><option>All sample dates</option><option>Today</option><option>Last 7 days</option></select></label></div>
     <article className="card audit-card"><div className="audit-head"><span>Time</span><span>User</span><span>Action</span><span>Target</span><span>Result</span><span>Details</span></div>{filteredRows.map((r, index) => <div className={`audit-row ${r[4]}`} key={`${index}-${r.join()}`}><time>{r[0]}</time><div className="user-cell"><Avatar name={r[1]}/><strong>{r[1]}</strong></div><span><i className={`audit-icon ${r[4]}`}><Icon name={r[4] === "denied" ? "shield" : r[2].includes("SSH") ? "terminal" : r[2].includes("Reboot") ? "refresh" : "check"}/></i>{r[2]}</span><span>{r[3]}</span><Status type={r[4] === "denied" ? "down" : "up"}>{r[4] === "denied" ? "Denied" : "Completed"}</Status><span>{r[5]}</span></div>)}{filteredRows.length === 0 && <p className="empty-message">No audit events match these filters.</p>}</article>
   </>;
 }
