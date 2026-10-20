@@ -707,9 +707,7 @@ function Users({ currentUser, onAudit }: { currentUser: string; onAudit: (row: A
     : userRows[index][1] === "Administrator" && userRows.filter((user) => user[1] === "Administrator").length < 2 ? "At least one administrator account must remain." : "";
   const deleteUser = () => {
     if (deleteIndex === null || deleteBlock(deleteIndex)) return;
-    const user = userRows[deleteIndex];
     setUserRows((current) => current.filter((_, index) => index !== deleteIndex));
-    onAudit(["09:21:36", currentUser, "User account deleted", user[0], "success", `${user[1]} account removed from the User Accounts DB`]);
     setDeleteIndex(null);
   };
   return <>
