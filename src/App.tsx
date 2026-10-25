@@ -13,6 +13,7 @@ type Screen =
   | "audit"
   | "insights"
   | "incident"
+  | "library"
   | "monitoring";
 
 const roles: { id: Role; label: string; short: string }[] = [
@@ -25,9 +26,9 @@ const roles: { id: Role; label: string; short: string }[] = [
 ];
 
 const permissions: Record<Role, Screen[]> = {
-  Admin: ["dashboard", "devices", "device", "ssh", "history", "reports", "users", "audit", "insights", "incident", "monitoring"],
-  Staff: ["dashboard", "devices", "device", "history", "reports", "insights", "incident"],
-  Director: ["dashboard", "devices", "device", "history", "reports", "insights", "incident"],
+  Admin: ["dashboard", "devices", "device", "ssh", "history", "reports", "users", "audit", "insights", "incident", "library", "monitoring"],
+  Staff: ["dashboard", "devices", "device", "history", "reports", "insights", "incident", "library"],
+  Director: ["dashboard", "devices", "device", "history", "reports", "insights", "incident", "library"],
   Helpdesk: ["dashboard", "devices", "device", "history", "incident"],
   Auditor: ["history", "reports", "audit"],
   Intern: ["dashboard", "devices", "device", "incident"],
@@ -38,6 +39,7 @@ const navItems: { screen: Screen; label: string; icon: IconName }[] = [
   { screen: "devices", label: "Devices", icon: "router" },
   { screen: "insights", label: "AI insights", icon: "spark" },
   { screen: "history", label: "Incident history", icon: "clock" },
+  { screen: "library", label: "Remediation library", icon: "book" },
   { screen: "reports", label: "Reports & analytics", icon: "chart" },
   { screen: "users", label: "Users & roles", icon: "users" },
   { screen: "audit", label: "Audit trail", icon: "shield" },
@@ -49,7 +51,7 @@ type IconName =
   | "bell" | "volume" | "chevron" | "router" | "switch" | "wifi" | "server"
   | "check" | "warning" | "down" | "eye" | "download" | "calendar" | "filter"
   | "terminal" | "refresh" | "close" | "arrow" | "menu" | "sun" | "moon"
-  | "lock" | "pin" | "activity" | "plus" | "edit" | "info" | "logout" | "trash";
+  | "lock" | "pin" | "activity" | "plus" | "edit" | "info" | "logout" | "trash" | "book";
 
 function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
   const paths: Partial<Record<IconName, ReactNode>> = {
@@ -89,6 +91,7 @@ function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
     edit: <><path d="m14 5 5 5L9 20H4v-5L14 5Z"/><path d="m12 7 5 5"/></>,
     info: <><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10h.01"/></>,
     logout: <><path d="M10 4H5v16h5m4-4 4-4-4-4m4 4H9"/></>,
+    book: <><path d="M5 4h10a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4Z"/><path d="M5 17a3 3 0 0 1 3-3h10M9 8h5"/></>,
   };
   return <svg className="icon" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
 }
@@ -231,7 +234,7 @@ function AlertBanner({ role, escalation, audible, onToggleSound, onAcknowledge, 
   </div>;
 }
 
-function Login({ role, setRole, onLogin }: { role: Role; setRole: (r: Role) => void; onLogin: () => void }) {
+function Login({ role, setRole, onLogin, onPrivacy }: { role: Role; setRole: (r: Role) => void; onLogin: () => void; onPrivacy: () => void }) {
   const [forgot, setForgot] = useState(false);
   const privileged = role === "Admin" || role === "Auditor";
   const submit = (e: FormEvent) => { e.preventDefault(); onLogin(); };
@@ -259,16 +262,17 @@ function Login({ role, setRole, onLogin }: { role: Role; setRole: (r: Role) => v
         <div className="login-options"><button type="button" className="link-btn" onClick={() => setForgot(true)}>Forgot password? Contact the network administrator</button></div>
         {forgot && <div className="inline-note"><Icon name="info" size={16}/><span>Ask the network administrator to reset your password. Self-service reset is not available.</span></div>}
         <Button type="submit">Enter operations console <Icon name="arrow" size={16}/></Button>
+        <p className="privacy-line"><Icon name="shield" size={14}/><span>You will be asked to review the <button type="button" className="link-btn inline" onClick={onPrivacy}>data privacy notice</button> (Data Privacy Act of 2012) before you enter.</span></p>
         <div className="demo-hint"><Icon name="info" size={14}/><span>Interactive prototype · Sample data only<br/>Demo credentials are prefilled. No live devices are connected.</span></div>
       </form>
     </section>
   </main>;
 }
 
-function AppShell({ role, setRole, screen, setScreen, dark, setDark, aiOn, attention, audible, setAudible, banner, openDevice, children, onLogout }: {
+function AppShell({ role, setRole, screen, setScreen, dark, setDark, aiOn, attention, audible, setAudible, banner, openDevice, children, onLogout, onPrivacy }: {
   role: Role; setRole: (r: Role) => void; screen: Screen; setScreen: (s: Screen) => void;
   dark: boolean; setDark: (v: boolean) => void; aiOn: boolean; attention: number; audible: boolean; setAudible: (v: boolean) => void;
-  banner?: ReactNode; openDevice: (name: string) => void; children: ReactNode; onLogout: () => void;
+  banner?: ReactNode; openDevice: (name: string) => void; children: ReactNode; onLogout: () => void; onPrivacy: () => void;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [roleOpen, setRoleOpen] = useState(false);
@@ -311,7 +315,7 @@ function AppShell({ role, setRole, screen, setScreen, dark, setDark, aiOn, atten
       </header>
       {banner}
       <main className="content">{children}</main>
-      <footer>Netknowing · CICT Main Campus <span>Prototype · Sample data only · No live device actions</span></footer>
+      <footer><div className="footer-links">Netknowing · CICT Main Campus<button className="link-btn" onClick={onPrivacy}><Icon name="shield" size={13}/> Data privacy notice</button></div><span>Prototype · Sample data only · No live device actions</span></footer>
     </div>
   </div>;
 }
@@ -537,7 +541,7 @@ function DeviceDetail({ role, go, device, openReboot, openIncident, onDenied }: 
       <aside className="device-aside">
         <article className="card detail-card"><div className="card-head"><div><h2>Availability</h2><p>Sample uptime and availability</p></div></div><div className="range-tabs">{["24 hours", "7 days", "30 days"].map((item) => <Button key={item} variant={range === item ? "primary" : "ghost"} onClick={() => setRange(item)}>{item}</Button>)}</div><div className="availability-stat"><strong>{availability}</strong><span>availability</span></div></article>
         <article className="card checks-card"><div className="card-head"><div><h2>Health checks</h2><p>Current polling results</p></div></div>{checks.map((c) => <div className="check-row" key={c[0]}><span><Icon name="activity"/><b>{c[0]}</b></span><Status type={c[2]}>{c[1]}</Status></div>)}</article>
-        <article className="card contacts-card"><div className="card-head"><div><h2>Escalation contacts</h2></div></div><div><Avatar name="Maria Santos"/><span><strong>Engr. Maria Santos</strong><small>Network Admin · Primary</small><a href="mailto:msantos@bulsu.edu.ph">msantos@bulsu.edu.ph</a></span></div><div><Avatar name="Paolo Cruz"/><span><strong>Paolo Cruz</strong><small>Tech Support · Secondary</small><a href="mailto:pcruz@bulsu.edu.ph">pcruz@bulsu.edu.ph</a></span></div></article>
+        <article className="card contacts-card"><div className="card-head"><div><h2>Escalation contacts</h2></div></div><div><Avatar name="Maria Santos"/><span><strong>Engr. Maria Santos</strong><small>Network Admin · Primary</small><a href="mailto:maria.santos@bulsu.edu.ph">maria.santos@bulsu.edu.ph</a></span></div><div><Avatar name="Paolo Cruz"/><span><strong>Paolo Cruz</strong><small>Tech Support · Secondary</small><a href="mailto:paolo.cruz@bulsu.edu.ph">paolo.cruz@bulsu.edu.ph</a></span></div></article>
       </aside>
     </section>
   </>;
@@ -590,6 +594,9 @@ ${device.name}# `}<span className="cursor">█</span></pre></div>
   </>;
 }
 
+const FAC_INC = "INC-2026-0417";
+
+// Newest first, so a lookup by device name returns the current incident for that device.
 const historyRows = [
   ["INC-2026-0419", "CICT-LAB3-SW-02", "Laboratory 3", "Latency drifting above baseline", "Early warning", "Oct 22, 07:30", "—", "—"],
   ["INC-2026-0418", "CICT-LAB2-SW-01", "Laboratory 2", "Device unreachable", "Active", "Oct 22, 08:42", "Oct 22, 08:49", "—"],
@@ -598,14 +605,69 @@ const historyRows = [
   ["INC-2026-0415", "CICT-CORE-RTR-01", "Server Room", "CPU threshold", "Resolved", "Oct 21, 16:12", "Oct 21, 16:14", "Oct 21, 16:38"],
   ["INC-2026-0414", "CICT-SRV-01", "Server Room", "TCP check failed", "Resolved", "Oct 21, 11:03", "Oct 21, 11:18", "Oct 21, 11:31"],
   ["INC-2026-0413", "CICT-F2-SW-02", "2nd Floor", "SNMP timeout", "Resolved", "Oct 20, 14:25", "Oct 20, 14:29", "Oct 20, 14:44"],
+  ["INC-2026-0412", "CICT-FAC-AP-03", "Faculty Room", "No response", "Resolved", "Oct 18, 13:40", "Oct 18, 13:44", "Oct 18, 14:02"],
+  ["INC-2026-0411", "CICT-LAB2-SW-01", "Laboratory 2", "Device unreachable", "Resolved", "Oct 14, 10:12", "Oct 14, 10:15", "Oct 14, 10:34"],
 ];
+
+// History as the rest of the app sees it: acknowledging or rebooting updates the matching rows.
+function buildHistory(overrides: Overrides, acked: boolean) {
+  return historyRows.map((row) => {
+    if (row[4] === "Resolved") return row;
+    const recovered = overrides[row[1]]?.status === "Up";
+    const ack = row[0] === FAC_INC && acked ? "Oct 22, 09:19" : row[6];
+    return recovered ? [row[0], row[1], row[2], row[3], "Resolved", row[5], ack, `Oct 22, ${profileFor(findDevice(row[1], overrides)).checkAt}`] : [row[0], row[1], row[2], row[3], row[4], row[5], ack, row[7]];
+  });
+}
+
+const issueCategory = (issue: string) =>
+  /unreachable|no response/i.test(issue) ? "Device unreachable" : /packet loss/i.test(issue) ? "Packet loss" : /latency/i.test(issue) ? "Latency drift"
+    : /snmp/i.test(issue) ? "SNMP timeout" : /tcp/i.test(issue) ? "TCP check failed" : /cpu/i.test(issue) ? "CPU threshold" : issue;
+
+const issueCategories = ["Device unreachable", "Packet loss", "Latency drift", "SNMP timeout", "TCP check failed", "CPU threshold"];
+
+// What the AI offers as a starting point for each kind of problem. The administrator edits it before anything is saved.
+const remediationTemplates: Record<string, { cause: string; steps: string[]; checks: string; services: string }> = {
+  "Device unreachable": { cause: "Recent packet-loss increases and simultaneous check failures suggest a device power or uplink issue. This is a suggestion, not a confirmed diagnosis.", steps: ["Verify power and UPS status at the device cabinet.", "Inspect the uplink and the connected switch port.", "Review interface errors after connectivity returns."], checks: "ICMP, SNMP, TCP/22", services: "network connectivity" },
+  "Packet loss": { cause: "Sustained packet loss on an access point usually points to a failing uplink cable, PoE fault or an overloaded radio. This is a suggestion, not a confirmed diagnosis.", steps: ["Check the uplink cable and PoE port for errors.", "Review client count and channel utilization for the access point.", "Compare with neighbouring access points before changing any channel setting."], checks: "ICMP (packet loss above threshold)", services: "wireless connections" },
+  "Latency drift": { cause: "Latency has drifted above this device's own baseline without crossing the alert threshold. Gradual drift often follows rising load or a degrading uplink. This is a suggestion, not a confirmed diagnosis.", steps: ["Review uplink utilization for the last 2 hours.", "Check for a new heavy-traffic source on the same switch.", "Keep monitoring and act only if latency crosses the alert threshold."], checks: "ICMP latency vs learned baseline", services: "none yet" },
+  "SNMP timeout": { cause: "SNMP replies are timing out while other checks may still respond, which often means a busy device or a changed SNMP access rule. This is a suggestion, not a confirmed diagnosis.", steps: ["Confirm the SNMP community string and access list were not changed.", "Check CPU load on the device, since a busy device can drop SNMP replies.", "Verify ICMP and TCP/22 still respond to rule out a full outage."], checks: "SNMP", services: "monitoring data only" },
+  "TCP check failed": { cause: "The service port stopped answering while the device may still respond to ping, which suggests a stopped service rather than a network fault. This is a suggestion, not a confirmed diagnosis.", steps: ["Confirm the service is running on the server.", "Check the local firewall rules for the monitored port.", "Restart the service only after capturing its recent logs."], checks: "TCP port check", services: "application availability" },
+  "CPU threshold": { cause: "CPU use crossed the configured threshold, commonly from a traffic burst, a routing change or a runaway process. This is a suggestion, not a confirmed diagnosis.", steps: ["Identify the top CPU processes on the device.", "Check for a recent configuration or routing change.", "Watch the five-minute CPU average before taking further action."], checks: "SNMP (CPU)", services: "brief slowdowns" },
+};
+
+type SavedOutput = {
+  incident: string; device: string; category: string; summary: string; cause: string; steps: string; notes: string;
+  status: "Approved" | "Edited" | "Rejected"; savedBy: string; savedAt: string;
+};
+
+// Sample outputs from earlier incidents so the library has history when the prototype opens.
+const initialOutputs: Record<string, SavedOutput> = Object.fromEntries(([
+  { incident: "INC-2026-0415", device: "CICT-CORE-RTR-01", category: "CPU threshold", summary: "CICT-CORE-RTR-01 crossed the CPU threshold at 04:12 PM during a heavy download window and recovered by itself within 26 minutes.", cause: "Traffic burst from a laboratory software update.", steps: "Checked the top CPU processes on the router.\nConfirmed no routing change was made that day.\nWatched the five-minute CPU average until it fell below 40%.", notes: "Software updates in the laboratories should be staggered. Ask the lab technicians to start them in groups.", status: "Approved", savedBy: "Maria Santos", savedAt: "Oct 21, 16:45" },
+  { incident: "INC-2026-0413", device: "CICT-F2-SW-02", category: "SNMP timeout", summary: "CICT-F2-SW-02 stopped answering SNMP polls at 02:25 PM while ping and TCP/22 stayed healthy.", cause: "SNMP access list was reset after a firmware update.", steps: "Confirmed ICMP and TCP/22 were still responding.\nRe-applied the SNMP community and access list from the saved configuration.\nWaited two polling cycles and confirmed SNMP replies returned.", notes: "After any firmware update on this switch, re-check the SNMP access list before leaving.", status: "Edited", savedBy: "Maria Santos", savedAt: "Oct 20, 14:50" },
+  { incident: "INC-2026-0412", device: "CICT-FAC-AP-03", category: "Device unreachable", summary: "CICT-FAC-AP-03 stopped responding at 01:40 PM and the Faculty Room lost Wi-Fi for about 22 minutes.", cause: "PoE port on the 3F switch stopped delivering power.", steps: "Checked the PoE status of the switch port serving the access point.\nDisabled and re-enabled the PoE port.\nConfirmed the access point returned and clients reconnected.", notes: "This access point has dropped before. If it happens again, replace the patch cable between the wall plate and the switch.", status: "Edited", savedBy: "Maria Santos", savedAt: "Oct 18, 14:20" },
+  { incident: "INC-2026-0411", device: "CICT-LAB2-SW-01", category: "Device unreachable", summary: "CICT-LAB2-SW-01 stopped responding at 10:12 AM and Laboratory 2 lost connectivity for about 22 minutes.", cause: "Circuit breaker tripped in the 2F cabinet.", steps: "Checked the UPS in the 2F cabinet and found the input breaker tripped.\nReset the breaker and power-cycled the switch.\nConfirmed the uplink to CICT-CORE-RTR-01 and the access point came back.", notes: "The breaker trips when too many devices share one power strip. Ask the laboratory technician to spread the load.", status: "Approved", savedBy: "Maria Santos", savedAt: "Oct 14, 10:41" },
+] as SavedOutput[]).map((output) => [output.incident, output]));
+
+const clockOf = (stamp: string) => stamp.split(", ")[1] ?? "";
+const to12h = (time: string) => { const [h, m] = time.split(":").map(Number); return `${String(h % 12 || 12).padStart(2, "0")}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`; };
+const minutesOf = (time: string) => { const [h, m] = time.split(":").map(Number); return h * 60 + m; };
+const formatSpan = (minutes: number) => minutes < 60 ? `${minutes} minutes` : `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, "0")}m`;
+const hhmm = (minutes: number) => `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+const longDate = (stamp: string) => { const [month, day] = (stamp.split(", ")[0] ?? "").split(" "); const names = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]; return `${names[monthIndex.indexOf(month)] ?? month} ${day}, 2026`; };
+const SAMPLE_NOW = "09:18";
+
+function draftSummary(device: string, location: string, issue: string, detected: string) {
+  const time = to12h(clockOf(detected));
+  return issueCategory(issue) === "Device unreachable"
+    ? `${device} stopped responding to ICMP, SNMP and TCP health checks at ${time}, interrupting connectivity for ${location}.`
+    : `${device} in ${location} raised "${issue.toLowerCase()}" at ${time}.`;
+}
 
 function History({ go, openIncident, overrides, acked, aiOn }: { go: (s: Screen) => void; openIncident: (name: string) => void; overrides: Overrides; acked: boolean; aiOn: boolean }) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("All statuses");
   const [period, setPeriod] = useState("Last 30 days");
-  const recoveredFac = overrides[FAC_AP]?.status === "Up";
-  const rows = historyRows.filter((row) => aiOn || row[4] !== "Early warning").map((row) => row[1] === FAC_AP ? [row[0], row[1], row[2], row[3], recoveredFac ? "Resolved" : row[4], row[5], acked ? "Oct 22, 09:19" : row[6], recoveredFac ? "Oct 22, 09:23" : row[7]] : row);
+  const rows = buildHistory(overrides, acked).filter((row) => aiOn || row[4] !== "Early warning");
   const visibleRows = rows.filter((row) => {
     const matchesQuery = row.join(" ").toLowerCase().includes(query.toLowerCase());
     const matchesStatus = status === "All statuses" || row[4] === status;
@@ -614,7 +676,7 @@ function History({ go, openIncident, overrides, acked, aiOn }: { go: (s: Screen)
   return <>
     <PageHeader eyebrow="Operations" title="Incident history" description="Search and review response timelines across the campus network." actions={<Button variant="secondary" icon="download" onClick={() => downloadCsv("netknowing-incidents.csv", [["Incident", "Device", "Location", "Issue", "Status", "Detected", "Acknowledged", "Resolved"], ...visibleRows])}>Export CSV</Button>}/>
     <div className="filter-bar"><div className="search-field"><Icon name="search"/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search device, location or keyword"/></div><label><Icon name="filter"/><select value={status} onChange={(event) => setStatus(event.target.value)}><option>All statuses</option><option>Active</option><option>Early warning</option><option>Monitoring</option><option>Resolved</option></select></label><label><Icon name="calendar"/><select value={period} onChange={(event) => setPeriod(event.target.value)}><option>Last 30 days</option><option>Last 7 days</option><option>This year</option></select></label><Button variant="ghost" onClick={() => { setQuery(""); setStatus("All statuses"); setPeriod("Last 30 days"); }}>Clear filters</Button></div>
-    <article className="card table-card"><div className="table-meta"><span><strong>{visibleRows.length} incidents</strong> found · {period}</span><small>Showing {visibleRows.length ? 1 : 0}–{visibleRows.length} of {visibleRows.length}</small></div><div className="table-scroll"><table><thead><tr><th>Incident</th><th>Device / location</th><th>Issue</th><th>Status</th><th>Detected</th><th>Acknowledged</th><th>Resolved</th><th/></tr></thead><tbody>{visibleRows.map((r) => <tr key={r[0]} onClick={() => openIncident(r[1])}><td><strong className="blue-text">{r[0]}</strong>{r[4] === "Early warning" && <small className="ai-text">AI</small>}</td><td><strong>{r[1]}</strong><small>{r[2]}</small></td><td>{r[3]}</td><td><Status type={r[4] === "Resolved" ? "up" : r[4] === "Active" ? "down" : r[4] === "Early warning" ? "ai" : "degraded"}>{r[4]}</Status></td><td>{r[5]}</td><td>{r[6]}</td><td>{r[7]}</td><td><Icon name="arrow"/></td></tr>)}</tbody></table>{visibleRows.length === 0 && <p className="empty-message">No incidents match these filters.</p>}</div></article>
+    <article className="card table-card"><div className="table-meta"><span><strong>{visibleRows.length} incidents</strong> found · {period}</span><small>Showing {visibleRows.length ? 1 : 0}–{visibleRows.length} of {visibleRows.length}</small></div><div className="table-scroll"><table><thead><tr><th>Incident</th><th>Device / location</th><th>Issue</th><th>Status</th><th>Detected</th><th>Acknowledged</th><th>Resolved</th><th/></tr></thead><tbody>{visibleRows.map((r) => <tr key={r[0]} onClick={() => openIncident(r[0])}><td><strong className="blue-text">{r[0]}</strong>{r[4] === "Early warning" && <small className="ai-text">AI</small>}</td><td><strong>{r[1]}</strong><small>{r[2]}</small></td><td>{r[3]}</td><td><Status type={r[4] === "Resolved" ? "up" : r[4] === "Active" ? "down" : r[4] === "Early warning" ? "ai" : "degraded"}>{r[4]}</Status></td><td>{r[5]}</td><td>{r[6]}</td><td>{r[7]}</td><td><Icon name="arrow"/></td></tr>)}</tbody></table>{visibleRows.length === 0 && <p className="empty-message">No incidents match these filters.</p>}</div></article>
   </>;
 }
 
@@ -626,7 +688,7 @@ const reportData: Record<ReportType, { title: string; range: string; availabilit
   monthly: { title: "Monthly management report", range: "23 September to 22 October 2026", availability: "99.42%", incidents: "127", mttd: "1m 24s", mttr: "26m", devices: [[FAC_AP, "Faculty Room · 3F", 12], ["CICT-LAB2-SW-01", "Laboratory 2 · 2F", 9], ["CICT-LAB3-AP-06", "Laboratory 3 · 2F", 7], ["CICT-F2-SW-02", "2nd Floor", 5], ["CICT-SRV-01", "Server Room", 3]] },
 };
 
-function GeneratedReport({ type, setType, role, onClose }: { type: ReportType; setType: (type: ReportType) => void; role: Role; onClose: () => void }) {
+function GeneratedReport({ type, setType, role, approved, onClose }: { type: ReportType; setType: (type: ReportType) => void; role: Role; approved: SavedOutput[]; onClose: () => void }) {
   const data = reportData[type];
   const roleLabel = roles.find((item) => item.id === role)!.label;
   const mostIncidents = data.devices[0][2];
@@ -641,12 +703,14 @@ function GeneratedReport({ type, setType, role, onClose }: { type: ReportType; s
     <div className="report-metrics">{metrics.map((metric) => <div key={metric[0]}><span>{metric[0]}</span><strong>{metric[1]}</strong></div>)}</div>
     <h3>Most frequently failing devices</h3>
     <table className="report-table"><thead><tr><th>#</th><th>Device</th><th>Location</th><th>Incidents</th></tr></thead><tbody>{data.devices.map((device, index) => <tr key={device[0]}><td>{index + 1}</td><td><strong>{device[0]}</strong></td><td>{device[1]}</td><td><div className="report-count"><span className="report-bar"><i style={{ width: `${Math.round(device[2] / mostIncidents * 100)}%` }}/></span><b>{device[2]}</b></div></td></tr>)}</tbody></table>
+    <h3>Approved incident summaries</h3>
+    {approved.length ? <ul className="report-summaries">{approved.slice(0, 3).map((item) => <li key={item.incident}><strong>{item.incident} · {item.device}</strong><span>{item.summary}</span></li>)}</ul> : <p className="report-note">No approved summaries yet.</p>}
     <p className="report-note"><Icon name="info" size={14}/> AI-generated incident summaries appear in management reports only after administrator approval. Rejected drafts are excluded.</p>
     <div className="modal-actions"><Button variant="secondary" icon="download" onClick={exportCsv}>Download CSV</Button><Button variant="secondary" onClick={() => window.print()}>Print or save as PDF</Button><Button onClick={onClose}>Close</Button></div>
   </div></div>;
 }
 
-function Reports({ role, onGenerated }: { role: Role; onGenerated: (type: ReportType) => void }) {
+function Reports({ role, outputs, onGenerated }: { role: Role; outputs: Record<string, SavedOutput>; onGenerated: (type: ReportType) => void }) {
   const [period, setPeriod] = useState("30");
   const [notice, setNotice] = useState("");
   const [reportType, setReportType] = useState<ReportType | null>(null);
@@ -667,7 +731,7 @@ function Reports({ role, onGenerated }: { role: Role; onGenerated: (type: Report
     <section className="reports-grid"><article className="card failure-card"><div className="card-head"><div><h2>Most frequently failing devices</h2><p>Incidents recorded in the selected period</p></div><button className="link-btn" onClick={() => setNotice("Showing the ranked sample devices for " + rangeLabel + ".")}>View details</button></div><div className="bar-list">{periodDevices.map((d, i) => <div className="bar-row" key={d[0]}><span className="rank">{i + 1}</span><div><span><strong>{d[0]}</strong><b>{d[1]} incidents</b></span><i><em style={{ width: `${d[2]}%` }}/></i></div></div>)}</div></article>
     <article className="card schedule-card"><div className="card-head"><div><h2>Scheduled reports</h2><p>Recurring operational summaries</p></div><Button variant="ghost" icon="plus" onClick={() => setNotice("Daily, weekly and monthly schedules are sample entries; scheduling requires a connected backend.")}>Schedule</Button></div>{[["Daily health summary", "Every day · 7:00 AM", "Daily"],["Weekly availability", "Every Monday · 8:00 AM", "Weekly"],["Monthly management report", "1st day · 9:00 AM", "Monthly"]].map((x) => <div className="schedule-row" key={x[0]}><span className="schedule-icon"><Icon name="calendar"/></span><div><strong>{x[0]}</strong><small>{x[1]}</small></div><Status type="neutral">{x[2]}</Status><button className="icon-btn" title={`Download ${x[0]}`} onClick={() => downloadCsv("netknowing-scheduled-report.csv", [["Report", "Schedule", "Period"], [x[0], x[1], rangeLabel]])}><Icon name="download"/></button></div>)}<div className="schedule-actions"><Button variant="secondary" icon="download" onClick={() => downloadCsv("netknowing-latest-report.csv", [["Report", "Generated for"], ["Latest operational summary", rangeLabel]])}>Download latest</Button><Button icon="chart" onClick={() => { const type: ReportType = period === "7" ? "weekly" : "monthly"; setReportType(type); onGenerated(type); }}>Generate report</Button></div></article></section>
     {notice && <div className="inline-note" role="status"><Icon name="info" size={16}/><span>{notice}</span></div>}
-    {reportType && <GeneratedReport type={reportType} setType={setReportType} role={role} onClose={() => setReportType(null)}/>}
+    {reportType && <GeneratedReport type={reportType} setType={setReportType} role={role} approved={Object.values(outputs).filter((item) => item.status !== "Rejected")} onClose={() => setReportType(null)}/>}
   </>;
 }
 
@@ -716,7 +780,7 @@ function Users({ currentUser, onAudit }: { currentUser: string; onAudit: (row: A
     <div className="admin-stats"><span><strong>{userRows.filter((user) => user[4] === "Active").length}</strong> Active users</span><span><strong>{userRows.filter((user) => user[2] === "Enabled").length}</strong> 2FA enabled</span><span><strong>{userRows.filter((user) => user[5] !== "—").length}</strong> Expiring accounts</span></div>
     <article className="card table-card"><div className="table-scroll"><table><thead><tr><th>User</th><th>Role</th><th>2FA status</th><th>Last login</th><th>Account status</th><th>Expiry date</th><th/></tr></thead><tbody>{userRows.map((u, index) => <tr key={`${u[0]}-${index}`}><td><div className="user-cell"><Avatar name={u[0]}/><span><strong>{u[0]}</strong><small>{u[6] ?? `${u[0].toLowerCase().replaceAll(" ", ".")}@bulsu.edu.ph`}</small></span></div></td><td>{u[1]}</td><td><Status type={u[2] === "Enabled" ? "up" : "neutral"}>{u[2]}</Status></td><td>{u[3]}</td><td><Status type={u[4] === "Active" ? "up" : "down"}>{u[4]}</Status></td><td>{u[5]}</td><td><div className="row-actions"><button className="icon-btn" aria-label={`Edit ${u[0]}`} onClick={() => openEdit(index)}><Icon name="edit"/></button><button className="icon-btn delete-btn" aria-label={`Delete ${u[0]}`} title={deleteBlock(index) || `Delete ${u[0]}`} aria-disabled={Boolean(deleteBlock(index))} onClick={() => setDeleteIndex(index)}><Icon name="trash"/></button></div></td></tr>)}</tbody></table></div></article>
     {deleteIndex !== null && <div className="modal-layer"><div className="modal-card" role="dialog" aria-modal="true" aria-label={`Delete ${userRows[deleteIndex][0]}`}><div className="modal-icon danger"><Icon name="trash" size={24}/></div><button className="modal-close" aria-label="Close" onClick={() => setDeleteIndex(null)}><Icon name="close"/></button><span className="overline red">Account access · sample data only</span><h2>Delete {userRows[deleteIndex][0]}?</h2><p>This removes the {userRows[deleteIndex][1]} account and its sign-in access. The deletion is recorded in the audit trail.</p>{deleteBlock(deleteIndex) && <div className="impact-box"><strong><Icon name="warning"/> Cannot delete this account</strong><p>{deleteBlock(deleteIndex)}</p></div>}<div className="modal-actions"><Button variant="secondary" onClick={() => setDeleteIndex(null)}>Cancel</Button><Button variant="danger" icon="trash" disabled={Boolean(deleteBlock(deleteIndex))} onClick={deleteUser}>Delete user</Button></div></div></div>}
-    {dialog && <div className="modal-layer"><form className="modal-card user-modal" onSubmit={saveUser}><button type="button" className="modal-close" onClick={() => setDialog(null)}><Icon name="close"/></button><span className="overline blue">Account access · sample data only</span><h2>{dialog === "add" ? "Add a new user" : "Edit user"}</h2><p>Assign the minimum access required for this user.</p><div className="form-grid"><label>Full name<input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="Full name"/></label><label>Email address<input required type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} placeholder="name@bulsu.edu.ph"/></label><label>Role<select value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })}>{roles.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}</select></label><label>Account status<select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}><option>Active</option><option>Suspended</option></select></label><label className="full">Account expiry <small>Recommended for Intern accounts</small><input type="date" value={form.expiry} onChange={(event) => setForm({ ...form, expiry: event.target.value })}/></label><label className="check-label full"><input type="checkbox" checked={form.twoFactor} onChange={(event) => setForm({ ...form, twoFactor: event.target.checked })}/> Require two-factor authentication</label></div><div className="modal-actions"><Button variant="secondary" onClick={() => setDialog(null)}>Cancel</Button><Button type="submit">{dialog === "add" ? "Add user" : "Save changes"}</Button></div></form></div>}
+    {dialog && <div className="modal-layer"><form className="modal-card user-modal" onSubmit={saveUser}><button type="button" className="modal-close" onClick={() => setDialog(null)}><Icon name="close"/></button><span className="overline blue">Account access · sample data only</span><h2>{dialog === "add" ? "Add a new user" : "Edit user"}</h2><p>Assign the minimum access required for this user.</p><div className="inline-note"><Icon name="shield" size={16}/><span>Name, email and sign-in activity are personal data. They are processed under the data privacy notice and visible in the audit trail.</span></div><div className="form-grid"><label>Full name<input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="Full name"/></label><label>Email address<input required type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} placeholder="name@bulsu.edu.ph"/></label><label>Role<select value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })}>{roles.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}</select></label><label>Account status<select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}><option>Active</option><option>Suspended</option></select></label><label className="full">Account expiry <small>Recommended for Intern accounts</small><input type="date" value={form.expiry} onChange={(event) => setForm({ ...form, expiry: event.target.value })}/></label><label className="check-label full"><input type="checkbox" checked={form.twoFactor} onChange={(event) => setForm({ ...form, twoFactor: event.target.checked })}/> Require two-factor authentication</label></div><div className="modal-actions"><Button variant="secondary" onClick={() => setDialog(null)}>Cancel</Button><Button type="submit">{dialog === "add" ? "Add user" : "Save changes"}</Button></div></form></div>}
   </>;
 }
 
@@ -786,39 +850,161 @@ function SupportingChart({ device }: { device: string }) {
   </div>;
 }
 
-function Insights({ role, aiOn, setAiOn }: { role: Role; aiOn: boolean; setAiOn: (value: boolean) => void }) {
+function Insights({ role, aiOn, setAiOn, go }: { role: Role; aiOn: boolean; setAiOn: (value: boolean) => void; go: (s: Screen) => void }) {
   const [falseAlarm, setFalseAlarm] = useState(false);
   const [showChart, setShowChart] = useState(false);
   return <>
     <PageHeader eyebrow="Assisted monitoring" title="AI insights" description={`${role === "Staff" || role === "Director" ? "Read-only view · " : ""}Pattern-based early warnings and maintenance prioritization.`} actions={role === "Admin" ? <label className="toggle-wrap"><span>AI features</span><button className={`toggle ${aiOn ? "on" : ""}`} onClick={() => setAiOn(!aiOn)}><i/></button><strong>{aiOn ? "On" : "Off"}</strong></label> : <Status type="ai">AI monitoring on</Status>}/>
     <div className="ai-principle"><Icon name="info"/><span>The ranking guides maintenance planning and does not predict when a device will fail. Nothing on this page acts on a device by itself.</span></div>
+    {permissions[role].includes("library") && <div className="ai-principle library-hint"><Icon name="book"/><span><strong>Where AI output is saved.</strong> Incident drafts the administrator approves or edits are kept in the Remediation library.</span><Button variant="secondary" icon="arrow" onClick={() => go("library")}>Open library</Button></div>}
     {!aiOn ? <><div className="permission-banner"><Icon name="info"/><span>AI features are off. Monitoring, alerts, and remediation continue as normal.</span></div><article className="card empty-state"><span className="summary-icon purple"><Icon name="spark"/></span><h2>AI features are off</h2><p>Early warnings, risk rankings and AI incident drafts are paused. The AI never sends commands to a device, on or off.</p><div className="still-running" aria-label="Services still running"><span><Icon name="check" size={14}/>Polling</span><span><Icon name="check" size={14}/>Alerting</span><span><Icon name="check" size={14}/>Remote remediation</span></div>{role === "Admin" ? <Button variant="purple" onClick={() => setAiOn(true)}>Turn AI features on</Button> : <Status type="neutral">Only an administrator can turn AI features on</Status>}</article></> :
     <section className="insights-grid"><article className="card warning-card"><div className="card-head"><div><h2>Early warnings</h2><p>Signals that may need closer observation</p></div><Status type="ai">1 active</Status></div><div className={`warning-item ${falseAlarm ? "muted" : ""}`}><div className="warning-title"><span className="summary-icon purple"><Icon name="spark"/></span><div><span>{falseAlarm ? "Marked false alarm" : "Latency above learned baseline"}</span><h3>CICT-LAB3-SW-02</h3><p>Latency has gradually increased by 31% over the last 2 hours. Current performance remains below the configured alert threshold.</p></div></div><div className="confidence"><span>Confidence</span><strong>Medium · 68%</strong><i><em/></i></div><div className="warning-details"><span><small>Baseline</small><strong>12–18 ms</strong></span><span><small>Current</small><strong>26 ms</strong></span><span><small>First observed</small><strong>1h 48m ago</strong></span></div><div className="warning-actions"><button className="btn btn-secondary" type="button" aria-expanded={showChart} onClick={() => setShowChart(!showChart)}><Icon name="chart" size={16}/> {showChart ? "Hide supporting chart" : "View supporting chart"}</button>{role === "Admin" && <Button variant="ghost" icon={falseAlarm ? "check" : "close"} onClick={() => setFalseAlarm(true)} disabled={falseAlarm}>{falseAlarm ? "Marked false alarm" : "Mark as false alarm"}</Button>}</div>{showChart && <SupportingChart device="CICT-LAB3-SW-02"/>}</div><div className="ai-explainer"><Icon name="spark"/><span><strong>Why this appeared</strong>Netknowing compares recent performance with this device's own historical behavior. It does not issue device commands.</span></div></article>
     <article className="card risk-card"><div className="card-head"><div><h2>Failure-risk ranking</h2><p>Maintenance planning priority</p></div><button className="link-btn">How this works</button></div>{[["CICT-FAC-AP-03","High","Recurring disconnects · 12 incidents","down",86],["CICT-LAB2-SW-01","High","Packet loss and SNMP timeouts","down",78],["CICT-LAB3-SW-02","Medium","Latency drifting above baseline","degraded",61],["CICT-LAB3-AP-06","Medium","Rising retransmission rate","degraded",54],["CICT-F2-SW-02","Medium","Power-cycle frequency","degraded",48],["CICT-SRV-01","Low","Stable recent performance","up",24]].map((r, i) => <div className="risk-row" key={r[0]}><b>{i + 1}</b><span><strong>{r[0]}</strong><small>{r[2]}</small><i><em className={r[3]} style={{width:`${r[4]}%`}}/></i></span><Status type={r[3] as "up"|"down"|"degraded"}>{r[1]}</Status></div>)}</article></section>}
   </>;
 }
 
-function Incident({ role, incident, aiOn, go, openDevice, acked, onAck, recovered, escalation }: { role: Role; incident: string; aiOn: boolean; go: (s: Screen) => void; openDevice: (name: string) => void; acked: boolean; onAck: () => void; recovered: boolean; escalation: number }) {
-  const isFac = incident === FAC_AP;
-  const acknowledged = !isFac || acked;
-  const [review, setReview] = useState<"draft"|"editing"|"approved"|"edited"|"rejected">("draft");
-  const [draftText, setDraftText] = useState("CICT-LAB2-SW-01 stopped responding to ICMP, SNMP and TCP health checks at 08:42 AM, interrupting connectivity for Laboratory 2.");
+const incidentServices: Record<string, string> = {
+  "CICT-LAB2-SW-01": "Laboratory 2 network · 25 clients", "CICT-FAC-AP-03": "Faculty Room network · 18 clients", "CICT-LAB3-AP-06": "Laboratory 3 wireless · slower connections",
+  "CICT-LAB3-SW-02": "Laboratory 3 network · no impact yet", "CICT-F2-SW-02": "2nd Floor network · brief interruption", "CICT-CORE-RTR-01": "Campus core routing · brief slowdown", "CICT-SRV-01": "Application server · TCP checks",
+};
+
+function Incident({ role, row, outputs, aiOn, go, openDevice, openIncident, onAck, onSave, onEnableAi, escalation }: {
+  role: Role; row: string[]; outputs: Record<string, SavedOutput>; aiOn: boolean; go: (s: Screen) => void; openDevice: (name: string) => void; openIncident: (id: string) => void;
+  onAck: () => void; onSave: (output: SavedOutput) => void; onEnableAi: () => void; escalation: number;
+}) {
+  const [id, device, location, issue, rowStatus, detected, ackStamp, resolvedStamp] = row;
+  const category = issueCategory(issue);
+  const template = remediationTemplates[category] ?? remediationTemplates["Device unreachable"];
+  const unreachable = category === "Device unreachable";
+  const early = rowStatus === "Early warning";
+  const resolved = rowStatus === "Resolved";
+  const acknowledged = ackStamp !== "—";
   const canAct = role === "Admin";
+  const canEdit = canAct && aiOn;
+  const readOnly = role === "Staff" || role === "Director";
+  const saved = outputs[id];
+  const fresh = { summary: draftSummary(device, location, issue, detected), cause: template.cause, steps: template.steps.join("\n"), notes: "" };
+  const view = saved ?? fresh;
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState(view);
+  const related = Object.values(outputs).filter((item) => item.incident !== id && item.category === category && item.status !== "Rejected").sort((x, y) => Number(y.device === device) - Number(x.device === device) || y.incident.localeCompare(x.incident));
+  const startEdit = (base = view) => { setForm(base); setEditing(true); };
+  const save = (status: SavedOutput["status"], content = view) => { onSave({ ...content, incident: id, device, category, status, savedBy: actors.Admin, savedAt: "Oct 22, 09:21" }); setEditing(false); };
+  const spanMinutes = minutesOf(resolved ? clockOf(resolvedStamp) : SAMPLE_NOW) - minutesOf(clockOf(detected));
+  const stateLabel = resolved ? "Resolved" : early ? "Early warning" : unreachable ? "Critical" : "Degraded";
+  const stateType = resolved ? "up" : early ? "ai" : unreachable ? "down" : "degraded";
+  const detectedDay = detected.startsWith("Oct 22") ? "today" : detected.split(", ")[0];
+  const startedLabel = `${longDate(detected)} · ${to12h(clockOf(detected))}`;
+  const ackDelta = acknowledged ? hhmm(minutesOf(clockOf(ackStamp)) - minutesOf(clockOf(detected))) : "—";
+  const resolvedDelta = resolved ? hhmm(minutesOf(clockOf(resolvedStamp)) - minutesOf(clockOf(detected))) : "—";
+  const draftStatus = saved ? saved.status : "Awaiting review";
+  const cardChip = <Status type={draftStatus === "Rejected" ? "down" : saved ? "up" : aiOn ? "ai" : "neutral"}>{saved ? (draftStatus === "Rejected" ? "Rejected" : draftStatus === "Edited" ? "Edited and saved" : "Approved and saved") : !aiOn ? "Not saved" : editing ? "Editing" : "Awaiting review"}</Status>;
+  const showCard = role !== "Helpdesk" && role !== "Intern";
+  const steps = (editing ? form.steps : view.steps).split("\n").map((line) => line.trim()).filter(Boolean);
+  const backTarget: Screen = resolved || !permissions[role].includes("dashboard") ? "history" : "dashboard";
   return <>
-    <button className="back-link">← Active incidents</button>
-    <PageHeader eyebrow={isFac ? "INC-2026-0417 · Active incident" : "INC-2026-0418 · Active incident"} title={isFac ? "CICT-FAC-AP-03 unreachable" : "CICT-LAB2-SW-01 unreachable"} description={`${role === "Staff" || role === "Director" ? "Read-only view · " : ""}${isFac ? "Faculty Room · Detected today at 08:16 AM" : "Laboratory 2 · Detected today at 08:42 AM"}`} actions={<><Button variant="secondary" icon="router" onClick={() => openDevice(incident)}>Open device</Button>{acknowledged ? <Status type="neutral">Acknowledged by Maria Santos{isFac ? "" : " · 08:49"}</Status> : canAct ? <Button variant="primary" icon="check" onClick={onAck}>Acknowledge incident</Button> : <Status type="down">Unacknowledged</Status>}</>}/>
+    <button className="back-link" onClick={() => go(permissions[role].includes(backTarget) ? backTarget : "dashboard")}>← {backTarget === "history" ? "Incident history" : "Active incidents"}</button>
+    <PageHeader eyebrow={`${id} · ${resolved ? "Resolved incident" : early ? "Early warning" : "Active incident"}`} title={unreachable ? `${device} unreachable` : `${device}: ${issue}`} description={`${readOnly ? "Read-only view · " : ""}${location} · Detected ${detectedDay} at ${to12h(clockOf(detected))}`} actions={<><Button variant="secondary" icon="router" onClick={() => openDevice(device)}>Open device</Button>{acknowledged ? <Status type="neutral">Acknowledged by Maria Santos · {to12h(clockOf(ackStamp))}</Status> : resolved ? <Status type="neutral">Resolved before acknowledgement</Status> : early ? <Status type="ai">Advisory · administrator review</Status> : canAct ? <Button variant="primary" icon="check" onClick={onAck}>Acknowledge incident</Button> : <Status type="down">Unacknowledged</Status>}</>}/>
     <section className="incident-page-grid"><div>
-      <article className="card incident-detail-card"><div className="card-head"><div><h2>Incident details</h2><p>Current state and impact</p></div><Status type={recovered ? "up" : "down"}>{recovered ? "Resolved" : "Critical"}</Status></div><dl className="incident-facts"><div><dt>Started</dt><dd>October 22, 2026 · {isFac ? "08:16" : "08:42"} AM</dd></div><div><dt>Duration</dt><dd>{isFac && !acked ? "04:12" : "36 minutes"}</dd></div><div><dt>Affected services</dt><dd>{isFac ? "Faculty Room network · 18 clients" : "Laboratory 2 network · 25 clients"}</dd></div><div><dt>Triggered checks</dt><dd>ICMP, SNMP, TCP/22</dd></div></dl></article>
-      <article className="card timeline-card"><div className="card-head"><div><h2>Response timeline</h2><p>Notification and escalation sequence</p></div></div><div className="timeline"><div className="done"><i><Icon name="down"/></i><span><strong>Incident detected</strong><small>{isFac ? "08:16 AM" : "08:42 AM"} · ICMP failed for 2 consecutive polls</small></span><time>00:00</time></div><div className="done"><i><Icon name="bell"/></i><span><strong>Alert sent by email and in-app</strong><small>Primary contact: Engr. Maria Santos</small></span><time>00:01</time></div><div className={acknowledged ? "done" : "current"}><i><Icon name={acknowledged ? "check" : "clock"}/></i><span><strong>{acknowledged ? "Acknowledged by Maria Santos" : "Awaiting acknowledgement"}</strong><small>{acknowledged ? (isFac ? "09:19 AM · Investigation started" : "08:49 AM · Investigation started") : escalationSentence(escalation)}</small></span><time>{acknowledged ? (isFac ? "01:03" : "00:07") : "—"}</time></div><div className={recovered ? "done" : ""}><i><Icon name="check"/></i><span><strong>Resolved</strong><small>{recovered ? "09:23 AM · Device recovered after reboot" : "Waiting for device recovery"}</small></span><time>{recovered ? "01:07" : "—"}</time></div></div></article>
+      <article className="card incident-detail-card"><div className="card-head"><div><h2>Incident details</h2><p>Current state and impact</p></div><Status type={stateType}>{stateLabel}</Status></div><dl className="incident-facts"><div><dt>Started</dt><dd>{startedLabel}</dd></div><div><dt>{resolved ? "Duration" : "Open for"}</dt><dd>{formatSpan(spanMinutes)}</dd></div><div><dt>Affected services</dt><dd>{incidentServices[device] ?? `Services on ${location}`}</dd></div><div><dt>Triggered checks</dt><dd>{template.checks}</dd></div></dl></article>
+      <article className="card timeline-card"><div className="card-head"><div><h2>Response timeline</h2><p>Notification and escalation sequence</p></div></div><div className="timeline">
+        <div className="done"><i><Icon name={early ? "spark" : "down"}/></i><span><strong>{early ? "Early warning raised" : "Incident detected"}</strong><small>{to12h(clockOf(detected))} · {early ? "Latency drifted above the learned baseline" : unreachable ? "ICMP failed for 2 consecutive polls" : issue}</small></span><time>00:00</time></div>
+        <div className="done"><i><Icon name="bell"/></i><span><strong>{early ? "Advisory shown in AI insights" : "Alert sent by email and in-app"}</strong><small>{early ? "Visible to the administrator and read-only roles" : "Primary contact: Engr. Maria Santos"}</small></span><time>{early ? "—" : "00:01"}</time></div>
+        <div className={acknowledged ? "done" : early || resolved ? "" : "current"}><i><Icon name={acknowledged ? "check" : "clock"}/></i><span><strong>{acknowledged ? "Acknowledged by Maria Santos" : early ? "No acknowledgement needed" : resolved ? "Not acknowledged" : "Awaiting acknowledgement"}</strong><small>{acknowledged ? `${to12h(clockOf(ackStamp))} · Investigation started` : early ? "Advisories are reviewed, not acknowledged" : resolved ? "Recovered before anyone acknowledged" : escalationSentence(escalation)}</small></span><time>{ackDelta}</time></div>
+        <div className={resolved ? "done" : ""}><i><Icon name="check"/></i><span><strong>Resolved</strong><small>{resolved ? `${to12h(clockOf(resolvedStamp))} · ${id === FAC_INC || id === "INC-2026-0418" ? "Device recovered after reboot" : "Service restored"}` : "Waiting for device recovery"}</small></span><time>{resolvedDelta}</time></div>
+      </div></article>
     </div>
-    {(aiOn && role !== "Helpdesk" && role !== "Intern") && <article className="card ai-draft-card"><div className="ai-draft-head"><span><Icon name="spark"/>AI-generated draft</span><Status type={review === "rejected" ? "down" : review === "draft" || review === "editing" ? "ai" : "up"}>{review === "draft" || review === "editing" ? "Awaiting review" : review === "rejected" ? "Rejected" : "Approved"}</Status></div><h2>Incident summary</h2><div className="draft-section"><span>What happened</span>{review === "editing" ? <textarea className="draft-editor" value={draftText} onChange={(event) => setDraftText(event.target.value)}/> : <p>{draftText}</p>}</div><div className="draft-section"><span>Likely cause</span><p>Recent packet-loss increases and simultaneous check failures suggest a device power or uplink issue. This is a suggestion, not a confirmed diagnosis.</p></div><div className="draft-section"><span>Suggested checks</span><ul><li>Verify power and UPS status at the 2nd floor cabinet.</li><li>Inspect the uplink to CICT-CORE-RTR-01.</li><li>Review interface errors after connectivity returns.</li></ul></div>
-      {review === "draft" && canAct && <div className="draft-actions"><Button variant="purple" icon="check" onClick={() => setReview("approved")}>Approve</Button><Button variant="secondary" icon="edit" onClick={() => setReview("editing")}>Edit</Button><Button variant="ghost" icon="close" onClick={() => setReview("rejected")}>Reject</Button></div>}
-      {review === "editing" && canAct && <div className="draft-actions"><Button variant="secondary" onClick={() => { setDraftText("CICT-LAB2-SW-01 stopped responding to ICMP, SNMP and TCP health checks at 08:42 AM, interrupting connectivity for Laboratory 2."); setReview("draft"); }}>Discard edit</Button><Button variant="purple" icon="check" disabled={!draftText.trim()} onClick={() => setReview("edited")}>Save edited summary</Button></div>}
-      {["approved", "edited", "rejected"].includes(review) && <div className={`review-result ${review}`}><Icon name={review === "rejected" ? "close" : "check"}/><span><strong>{review === "rejected" ? "Excluded from management reports" : review === "edited" ? "Edited and approved by Maria Santos" : "Approved by Maria Santos"}</strong><small>{review === "rejected" ? "This draft will not appear in generated reports." : "Today at 09:21 AM"}</small></span></div>}
-      {!canAct && (review === "draft" || review === "editing") && <div className="review-result"><Icon name="lock"/><span><strong>Administrator review required</strong><small>Your role can view, but cannot approve AI summaries.</small></span></div>}
-      <div className="privacy-note"><Icon name="shield"/><span>Credentials and sensitive configuration text were removed before drafting.</span></div></article>}
+    {showCard && <div className="incident-side">
+      <article className="card ai-draft-card"><div className="ai-draft-head"><span><Icon name="spark"/>{aiOn ? "AI-generated draft" : "Remediation record · AI off"}</span>{cardChip}</div><h2>Incident summary and remediation</h2>
+        {!aiOn && !saved && <div className="locked-note"><Icon name="lock"/><span><strong>Nothing saved for this incident yet</strong>Remediation steps and notes can only be written while AI features are on, so the administrator edits and saves the AI output. Alerting and remediation actions are unaffected.</span>{canAct && <Button variant="purple" icon="spark" onClick={onEnableAi}>Turn AI features on</Button>}</div>}
+        {(aiOn || saved) && <>
+          <div className="draft-section"><span>What happened</span>{editing ? <textarea className="draft-editor" aria-label="What happened" value={form.summary} onChange={(event) => setForm({ ...form, summary: event.target.value })}/> : <p>{view.summary}</p>}</div>
+          <div className="draft-section"><span>Likely cause</span>{editing ? <textarea className="draft-editor" aria-label="Likely cause" value={form.cause} onChange={(event) => setForm({ ...form, cause: event.target.value })}/> : <p>{view.cause}</p>}</div>
+          <div className="draft-section"><span>Remediation steps{editing && <small> · one step per line</small>}</span>{editing ? <textarea className="draft-editor tall" aria-label="Remediation steps" value={form.steps} onChange={(event) => setForm({ ...form, steps: event.target.value })}/> : <ul>{steps.map((step) => <li key={step}>{step}</li>)}</ul>}</div>
+          <div className="draft-section"><span>Administrator notes{editing && <small> · what to remember if this happens again</small>}</span>{editing ? <textarea className="draft-editor" aria-label="Administrator notes" placeholder="Add anything the next person on duty should know" value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })}/> : view.notes ? <p>{view.notes}</p> : <p className="faint-text">No notes added.</p>}</div>
+        </>}
+        {canEdit && !editing && !saved && <div className="draft-actions"><Button variant="purple" icon="check" onClick={() => save("Approved")}>Approve and save</Button><Button variant="secondary" icon="edit" onClick={() => startEdit()}>Edit</Button><Button variant="ghost" icon="close" onClick={() => save("Rejected")}>Reject</Button></div>}
+        {canEdit && editing && <div className="draft-actions"><Button variant="secondary" onClick={() => setEditing(false)}>Discard edits</Button><Button variant="purple" icon="check" disabled={!form.summary.trim() || !form.steps.trim()} onClick={() => save("Edited", { ...form, summary: form.summary.trim(), cause: form.cause.trim(), steps: form.steps.trim(), notes: form.notes.trim() })}>Save edited output</Button></div>}
+        {canEdit && !editing && saved && <div className="draft-actions"><Button variant="secondary" icon="edit" onClick={() => startEdit()}>{saved.status === "Rejected" ? "Edit and save instead" : "Edit again"}</Button></div>}
+        {saved && <div className={`review-result ${saved.status === "Rejected" ? "rejected" : saved.status === "Edited" ? "edited" : "approved"}`}><Icon name={saved.status === "Rejected" ? "close" : "check"}/><span><strong>{saved.status === "Rejected" ? "Excluded from the library and reports" : `Saved to the Remediation library · ${saved.status === "Edited" ? "edited and approved" : "approved"} by ${saved.savedBy}`}</strong><small>{saved.savedAt} · {saved.status === "Rejected" ? "This draft will not appear in generated reports." : "Included in management reports. Anyone with library access can read it."}</small></span>{permissions[role].includes("library") && <button className="link-btn" onClick={() => go("library")}>Open library</button>}</div>}
+        {saved && !canEdit && canAct && <div className="review-result"><Icon name="lock"/><span><strong>Editing is paused while AI features are off</strong><small>Turn AI features on to edit this saved output.</small></span><button className="link-btn" onClick={onEnableAi}>Turn on</button></div>}
+        {!canAct && !saved && <div className="review-result"><Icon name="lock"/><span><strong>Administrator review required</strong><small>Your role can view, but cannot approve or edit AI output.</small></span></div>}
+        <div className="privacy-note"><Icon name="shield"/><span>Credentials and sensitive configuration text were removed before drafting. Only the administrator can approve or edit.</span></div>
+      </article>
+      <article className="card related-card"><div className="card-head"><div><h2>Same problem before</h2><p>Saved remediation for “{category}” on other incidents</p></div><Status type="neutral">{related.length} saved</Status></div>
+        {related.length === 0 ? <p className="empty-message">Nothing saved for this kind of problem yet. Approve or edit the draft above and it will appear here next time.</p> : related.map((item) => <div className="related-item" key={item.incident}>
+          <div className="related-head"><span><strong>{item.device}</strong><small>{item.incident} · {item.savedAt}{item.device === device ? " · same device" : ""}</small></span><Status type={item.status === "Edited" ? "ai" : "up"}>{item.status}</Status></div>
+          <ol>{item.steps.split("\n").filter(Boolean).map((step) => <li key={step}>{step}</li>)}</ol>
+          {item.notes && <p className="related-notes"><b>Note</b> {item.notes}</p>}
+          <div className="related-actions">{canEdit && !editing && <button className="link-btn" onClick={() => startEdit({ ...view, steps: item.steps, notes: view.notes || item.notes })}><Icon name="edit" size={14}/> Use as starting point</button>}<button className="link-btn" onClick={() => openIncident(item.incident)}>View incident <Icon name="arrow" size={14}/></button></div>
+        </div>)}
+      </article>
+    </div>}
     </section>
   </>;
+}
+
+function Library({ role, outputs, aiOn, openIncident, onEnableAi }: { role: Role; outputs: Record<string, SavedOutput>; aiOn: boolean; openIncident: (id: string) => void; onEnableAi: () => void }) {
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState("All statuses");
+  const [category, setCategory] = useState("All problems");
+  const all = Object.values(outputs).sort((x, y) => y.incident.localeCompare(x.incident));
+  const rows = all.filter((item) => `${item.incident} ${item.device} ${item.category} ${item.summary} ${item.steps} ${item.notes}`.toLowerCase().includes(query.toLowerCase()) && (status === "All statuses" || item.status === status) && (category === "All problems" || item.category === category));
+  return <>
+    <PageHeader eyebrow="Operations" title="Remediation library" description="Every AI output an administrator approves or edits is saved here, with the steps and notes to follow when the same problem returns." actions={<Button variant="secondary" icon="download" onClick={() => downloadCsv("netknowing-remediation-library.csv", [["Incident", "Device", "Problem", "Status", "Summary", "Remediation steps", "Administrator notes", "Saved by", "Saved at"], ...rows.map((item) => [item.incident, item.device, item.category, item.status, item.summary, item.steps.split("\n").join(" | "), item.notes, item.savedBy, item.savedAt])])}>Export CSV</Button>}/>
+    <div className="ai-principle"><Icon name="info"/><span><strong>Where outputs are saved.</strong> Opening an incident and choosing Approve and save, or Save edited output, adds the entry below. Rejected drafts stay listed but are left out of reports. Each save is also written to the Audit trail. In this prototype the library lives in the current session only.</span></div>
+    {!aiOn && <div className="permission-banner"><Icon name="lock"/><span>AI features are off. Saved outputs stay readable, but they cannot be edited or added to until AI features are on.{role === "Admin" && <> <button className="link-btn inline" onClick={onEnableAi}>Turn AI features on</button></>}</span></div>}
+    <div className="admin-stats"><span><strong>{all.length}</strong> Saved outputs</span><span><strong>{all.filter((item) => item.status === "Approved").length}</strong> Approved</span><span><strong>{all.filter((item) => item.status === "Edited").length}</strong> Edited by administrator</span><span><strong>{new Set(all.map((item) => item.category)).size}</strong> Problem types</span></div>
+    <div className="filter-bar"><div className="search-field"><Icon name="search"/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search device, problem, step or note"/></div><label><Icon name="filter"/><select value={category} onChange={(event) => setCategory(event.target.value)}><option>All problems</option>{issueCategories.map((item) => <option key={item}>{item}</option>)}</select></label><label><Icon name="check"/><select value={status} onChange={(event) => setStatus(event.target.value)}><option>All statuses</option><option>Approved</option><option>Edited</option><option>Rejected</option></select></label></div>
+    <article className="card table-card"><div className="table-meta"><span><strong>{rows.length} saved outputs</strong> shown</span><small>{role === "Admin" ? "Edit an entry from its incident" : "Read-only for your role"}</small></div><div className="table-scroll"><table className="library-table"><thead><tr><th>Incident</th><th>Device / problem</th><th>Saved remediation</th><th>Status</th><th>Saved by</th><th/></tr></thead><tbody>{rows.map((item) => { const steps = item.steps.split("\n").filter(Boolean); return <tr key={item.incident} onClick={() => openIncident(item.incident)}>
+      <td><strong className="blue-text">{item.incident}</strong><small>{item.savedAt}</small></td>
+      <td><strong>{item.device}</strong><small>{item.category}</small></td>
+      <td className="library-steps"><span>{steps[0]}</span><small>{steps.length > 1 ? `+ ${steps.length - 1} more step${steps.length > 2 ? "s" : ""}` : "1 step"}{item.notes ? " · has notes" : ""}</small></td>
+      <td><Status type={item.status === "Rejected" ? "down" : item.status === "Edited" ? "ai" : "up"}>{item.status}</Status></td>
+      <td>{item.savedBy}</td><td><Icon name="arrow"/></td></tr>; })}</tbody></table>{rows.length === 0 && <p className="empty-message">No saved outputs match these filters.</p>}</div></article>
+  </>;
+}
+
+function PrivacyNotice({ mode, onAccept, onDecline, onClose }: { mode: "consent" | "view"; onAccept: () => void; onDecline: () => void; onClose: () => void }) {
+  const [agreed, setAgreed] = useState(false);
+  const items: [string, string][] = [
+    ["What we collect", "Your name, institutional email address, role, sign-in times and the IP address of each session. Actions you take in the console, such as acknowledging incidents, rebooting devices or opening SSH sessions, are recorded in the audit trail. SSH sessions are recorded."],
+    ["Why we collect it", "To control who can reach network devices, keep an accountable record of changes, investigate incidents and report on service reliability to CICT officials."],
+    ["Who can see it", "Access follows role. Only the Network Admin manages accounts, and the Auditor can read the audit trail. Personal data is not sold or shared outside the university except where the law requires it."],
+    ["How long we keep it", "Account and audit records are kept under the university's records retention schedule, then deleted or anonymized."],
+    ["Your rights", "You may ask to see, correct or object to the processing of your personal data, and you may lodge a complaint with the National Privacy Commission. Contact the university Data Protection Officer to do so."],
+    ["AI features", "When switched on, AI features read device names, performance readings and incident timelines to draft summaries. Passwords, keys and device configuration secrets are removed first, and staff names and emails are not sent. Nothing is saved until an administrator approves it."],
+  ];
+  return <div className="modal-layer"><div className="modal-card privacy-card" role="dialog" aria-modal="true" aria-labelledby="privacy-title">
+    {mode === "view" && <button className="modal-close" onClick={onClose} aria-label="Close"><Icon name="close"/></button>}
+    <div className="modal-icon info"><Icon name="shield" size={24}/></div>
+    <span className="overline blue">Republic Act No. 10173 · Data Privacy Act of 2012</span>
+    <h2 id="privacy-title">Data privacy notice</h2>
+    <p>Bulacan State University, College of Information and Communications Technology, uses Netknowing to monitor campus network devices. This notice explains how your personal data is handled when you use the console.</p>
+    <div className="privacy-sections">{items.map(([title, body]) => <section key={title}><h3>{title}</h3><p>{body}</p></section>)}</div>
+    {mode === "consent" ? <>
+      <label className="check-label consent-check"><input type="checkbox" checked={agreed} onChange={(event) => setAgreed(event.target.checked)}/><span>I have read and understood this notice and I consent to the processing of my personal data as described.</span></label>
+      <div className="modal-actions"><Button variant="secondary" onClick={onDecline}>Decline and sign out</Button><Button icon="check" disabled={!agreed} onClick={onAccept}>Accept and continue</Button></div>
+    </> : <div className="modal-actions"><Button onClick={onClose}>Close</Button></div>}
+    <p className="mockup-note"><Icon name="info" size={13}/> Prototype wording. The Data Protection Officer should review this notice before it is used.</p>
+  </div></div>;
+}
+
+function AiConsent({ onConfirm, onCancel }: { onConfirm: () => void; onCancel: () => void }) {
+  const [agreed, setAgreed] = useState(false);
+  return <div className="modal-layer"><div className="modal-card consent-card" role="dialog" aria-modal="true" aria-labelledby="ai-consent-title">
+    <div className="modal-icon ai"><Icon name="spark" size={24}/></div>
+    <span className="overline blue">AI features · data processing</span>
+    <h2 id="ai-consent-title">Turn on AI features?</h2>
+    <p>Early warnings, risk ranking and incident drafts read monitoring data. Review what is used before you continue.</p>
+    <div className="consent-columns">
+      <div><h3>Used</h3><ul><li>Device names, types and locations</li><li>Latency, packet loss and check results</li><li>Incident timelines</li></ul></div>
+      <div><h3>Never sent</h3><ul><li>Passwords, keys and device secrets</li><li>Staff names and emails</li><li>Anything that acts on a device</li></ul></div>
+    </div>
+    <div className="inline-note consent-note"><Icon name="info" size={16}/><span><strong>Saved only after your approval.</strong> AI output is a draft. Only what an administrator approves or edits is saved to the Remediation library and included in reports. Turning AI off keeps saved entries, read-only.</span></div>
+    <label className="check-label consent-check"><input type="checkbox" checked={agreed} onChange={(event) => setAgreed(event.target.checked)}/><span>I authorize AI processing of network monitoring data for CICT, as described in the data privacy notice.</span></label>
+    <div className="modal-actions"><Button variant="secondary" onClick={onCancel}>Cancel</Button><Button variant="purple" icon="spark" disabled={!agreed} onClick={onConfirm}>Turn AI features on</Button></div>
+  </div></div>;
 }
 
 const actors: Record<Role, string> = { Admin: "Maria Santos", Staff: "Paolo Cruz", Director: "Dr. Elena Reyes", Helpdesk: "Luis Garcia", Auditor: "Ana Mendoza", Intern: "Jonas Ramos · Intern" };
@@ -835,13 +1021,18 @@ export default function App() {
   const [escalation, setEscalation] = useState(252);
   const [overrides, setOverrides] = useState<Overrides>({});
   const [auditRows, setAuditRows] = useState<AuditRow[]>(initialAuditRows);
-  const [incidentTarget, setIncidentTarget] = useState("CICT-LAB2-SW-01");
+  const [outputs, setOutputs] = useState<Record<string, SavedOutput>>(initialOutputs);
+  const [privacy, setPrivacy] = useState<"consent" | "view" | null>(null);
+  const [privacyAccepted, setPrivacyAccepted] = useState(false);
+  const [aiConsent, setAiConsent] = useState(false);
+  const [incidentTarget, setIncidentTarget] = useState("INC-2026-0418");
   const [deviceTarget, setDeviceTarget] = useState("CICT-LAB2-SW-01");
   const startScreen = useMemo(() => role === "Auditor" ? "audit" : "dashboard", [role]);
   const navigate = (next: Screen) => {
     if (permissions[role].includes(next)) setScreen(next);
   };
-  const openIncident = (name: string) => { setIncidentTarget(name); navigate("incident"); };
+  // Accepts an incident id, or a device name for the current incident on that device.
+  const openIncident = (key: string) => { setIncidentTarget(historyRows.find((row) => row[0] === key || row[1] === key)?.[0] ?? key); navigate("incident"); };
   const openDevice = (name: string) => { setDeviceTarget(name); navigate("device"); };
   const addAudit = (row: AuditRow) => setAuditRows((current) => [row, ...current]);
   const device = findDevice(deviceTarget, overrides);
@@ -867,8 +1058,21 @@ export default function App() {
     addAudit(["09:19:32", "Maria Santos", "Incident acknowledged", "INC-2026-0417", "success", "Acknowledged at 09:19"]);
   };
   const toggleAi = (value: boolean) => {
+    setAiConsent(false);
     setAiOn(value);
     addAudit(["09:20:41", "Maria Santos", value ? "AI features switched on" : "AI features switched off", "AI insights", "success", value ? "Early warnings, risk ranking and AI drafts resumed" : "Polling, alerting and remediation continue unchanged"]);
+  };
+  // Turning AI on needs the administrator to confirm what data the AI uses; turning it off does not.
+  const requestAi = (value: boolean) => value ? setAiConsent(true) : toggleAi(false);
+  const saveOutput = (output: SavedOutput) => {
+    setOutputs((current) => ({ ...current, [output.incident]: output }));
+    addAudit(["09:21:36", actors[role], output.status === "Rejected" ? "AI draft rejected" : output.status === "Edited" ? "Remediation edited and saved" : "Remediation approved and saved", output.incident, "success", output.status === "Rejected" ? "Excluded from the Remediation library and reports" : `Saved to the Remediation library · ${output.category} on ${output.device}`]);
+  };
+  const acceptPrivacy = () => {
+    setPrivacyAccepted(true);
+    setPrivacy(null);
+    addAudit(["09:16:48", actors[role], "Data privacy notice accepted", "Netknowing privacy notice", "success", "Consent recorded for this sign-in"]);
+    setScreen(startScreen);
   };
   const attention = liveIncidents(overrides, aiOn).filter((item) => (role !== "Helpdesk" && role !== "Intern") || item.kind !== "ai").length;
   const banner = screen === "login" ? null : alertPending
@@ -882,15 +1086,18 @@ export default function App() {
     screen === "device" ? <DeviceDetail key={deviceTarget} role={role} go={navigate} device={device} openReboot={() => setReboot(true)} openIncident={() => openIncident(deviceTarget)} onDenied={() => addAudit(["09:18:11", "Jonas Ramos · Intern", "Reboot attempt denied", deviceTarget, "denied", "Not allowed for your role"])} /> :
     screen === "ssh" ? <SSH go={navigate} device={device} onStart={() => addAudit(["09:17:00", "Maria Santos", "SSH session started", deviceTarget, "success", "Session recorded"])} onEnd={() => addAudit(["09:18:00", "Maria Santos", "SSH session ended", deviceTarget, "success", "Session closed"])} /> :
     screen === "history" ? <History go={navigate} openIncident={openIncident} overrides={overrides} acked={acked} aiOn={aiOn}/> :
-    screen === "reports" ? <Reports role={role} onGenerated={(type) => addAudit(["09:20:05", actors[role], "Report generated", reportData[type].title, "success", "Sample report preview · availability, incident count, MTTD, MTTR and top failing devices"])}/> :
+    screen === "reports" ? <Reports role={role} outputs={outputs} onGenerated={(type) => addAudit(["09:20:05", actors[role], "Report generated", reportData[type].title, "success", "Sample report preview · availability, incident count, MTTD, MTTR and top failing devices"])}/> :
     screen === "users" ? <Users currentUser={actors[role]} onAudit={addAudit}/> :
     screen === "audit" ? <Audit rows={auditRows}/> :
-    screen === "insights" ? <Insights role={role} aiOn={aiOn} setAiOn={toggleAi}/> :
-    screen === "incident" ? <Incident role={role} incident={incidentTarget} aiOn={aiOn} go={navigate} openDevice={openDevice} acked={acked} onAck={acknowledge} recovered={facRecovered && incidentTarget === FAC_AP} escalation={escalation}/> :
+    screen === "insights" ? <Insights role={role} aiOn={aiOn} setAiOn={requestAi} go={navigate}/> :
+    screen === "library" ? <Library role={role} outputs={outputs} aiOn={aiOn} openIncident={openIncident} onEnableAi={() => requestAi(true)}/> :
+    screen === "incident" ? <Incident key={incidentTarget} role={role} row={buildHistory(overrides, acked).find((row) => row[0] === incidentTarget) ?? historyRows[1]} outputs={outputs} aiOn={aiOn} go={navigate} openDevice={openDevice} openIncident={openIncident} onAck={acknowledge} onSave={saveOutput} onEnableAi={() => requestAi(true)} escalation={escalation}/> :
     screen === "monitoring" ? <MonitoringSetup/> : null;
   return <div className={dark ? "dark" : ""}>
-    {screen === "login" ? <Login role={role} setRole={setRole} onLogin={() => setScreen(startScreen)}/> :
-      <AppShell role={role} setRole={setRole} screen={screen} setScreen={setScreen} dark={dark} setDark={setDark} aiOn={aiOn} attention={attention} audible={audible} setAudible={setAudible} banner={banner} openDevice={openDevice} onLogout={() => setScreen("login")}>{content}</AppShell>}
+    {screen === "login" ? <Login role={role} setRole={setRole} onLogin={() => privacyAccepted ? setScreen(startScreen) : setPrivacy("consent")} onPrivacy={() => setPrivacy("view")}/> :
+      <AppShell role={role} setRole={setRole} screen={screen} setScreen={setScreen} dark={dark} setDark={setDark} aiOn={aiOn} attention={attention} audible={audible} setAudible={setAudible} banner={banner} openDevice={openDevice} onPrivacy={() => setPrivacy("view")} onLogout={() => setScreen("login")}>{content}</AppShell>}
+    {privacy && <PrivacyNotice mode={privacy} onAccept={acceptPrivacy} onDecline={() => setPrivacy(null)} onClose={() => setPrivacy(null)}/>}
+    {aiConsent && <AiConsent onConfirm={() => toggleAi(true)} onCancel={() => setAiConsent(false)}/>}
     {reboot && <RebootModal device={device} onClose={() => setReboot(false)} onRecovered={() => setOverrides((current) => ({ ...current, [deviceTarget]: { status: "Up", latency: "12 ms" } }))} onConfirm={(reason) => addAudit([profile.rebootAt, "Maria Santos", "Reboot initiated", deviceTarget, "success", `Reason: ${reason} · Completed. Health check ${profile.checkAt}: ${profile.recovers ? "device recovered, ICMP, SNMP and TCP/22 responding" : "no response"}.`])}/>}
   </div>;
 }
