@@ -44,3 +44,9 @@ const navItems: { screen: Screen; label: string; icon: IconName }[] = [
   { screen: "monitoring", label: "Monitoring setup", icon: "activity" },
 ];
 
+type IconName =
+  | "grid" | "spark" | "clock" | "chart" | "users" | "shield" | "search"
+  | "bell" | "volume" | "chevron" | "router" | "switch" | "wifi" | "server"
+  | "check" | "warning" | "down" | "eye" | "download" | "calendar" | "filter"
+  | "terminal" | "refresh" | "close" | "arrow" | "menu" | "sun" | "moon"
+  | "lock" | "pin" | "activity" | "plus" | "edit" | "info" | "logout" | "trash";
