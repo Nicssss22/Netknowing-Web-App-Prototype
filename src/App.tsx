@@ -16,10 +16,10 @@ type Screen =
   | "monitoring";
 
 const roles: { id: Role; label: string; short: string }[] = [
-  { id: "Admin", label: "Network Administrator", short: "Administrator" },
-  { id: "Staff", label: "CICT Staff", short: "CICT Staff" },
-  { id: "Director", label: "Management Viewer (Director)", short: "Director" },
-  { id: "Helpdesk", label: "IT Helpdesk", short: "Helpdesk" },
+  { id: "Admin", label: "Network Admin", short: "Network Admin" },
+  { id: "Staff", label: "Tech Support", short: "Tech Support" },
+  { id: "Director", label: "Dean", short: "Dean" },
+  { id: "Helpdesk", label: "Secretary", short: "Secretary" },
   { id: "Auditor", label: "Auditor", short: "Auditor" },
   { id: "Intern", label: "Intern", short: "Intern" },
 ];
@@ -383,8 +383,8 @@ function Dashboard({ role, go, openIncident, openDevice, overrides, aiOn, acked,
       </article>
       <article className="card handoff-card">
         <div className="card-head"><div><h2>Operations desk</h2><p>Response ownership and monitoring scope</p></div><Icon name="shield" size={18}/></div>
-        <div className="desk-contact"><Avatar name="Maria Santos"/><div><strong>Engr. Maria Santos</strong><span>Network Administrator · Primary contact</span></div></div>
-        <div className="desk-fact"><span>Secondary contact</span><strong>Paolo Cruz · CICT Staff</strong></div>
+        <div className="desk-contact"><Avatar name="Maria Santos"/><div><strong>Engr. Maria Santos</strong><span>Network Admin · Primary contact</span></div></div>
+        <div className="desk-fact"><span>Secondary contact</span><strong>Paolo Cruz · Tech Support</strong></div>
         <div className="desk-fact"><span>Alert delivery</span><strong>Email and in-app</strong></div>
         <div className="desk-fact"><span>Monitored checks</span><strong>ICMP / SNMP / TCP</strong></div>
         <div className="desk-note"><Icon name="info" size={17}/><span>Recommendations never run automatically. Reboots and SSH sessions require an administrator.</span></div>
@@ -537,7 +537,7 @@ function DeviceDetail({ role, go, device, openReboot, openIncident, onDenied }: 
       <aside className="device-aside">
         <article className="card detail-card"><div className="card-head"><div><h2>Availability</h2><p>Sample uptime and availability</p></div></div><div className="range-tabs">{["24 hours", "7 days", "30 days"].map((item) => <Button key={item} variant={range === item ? "primary" : "ghost"} onClick={() => setRange(item)}>{item}</Button>)}</div><div className="availability-stat"><strong>{availability}</strong><span>availability</span></div></article>
         <article className="card checks-card"><div className="card-head"><div><h2>Health checks</h2><p>Current polling results</p></div></div>{checks.map((c) => <div className="check-row" key={c[0]}><span><Icon name="activity"/><b>{c[0]}</b></span><Status type={c[2]}>{c[1]}</Status></div>)}</article>
-        <article className="card contacts-card"><div className="card-head"><div><h2>Escalation contacts</h2></div></div><div><Avatar name="Maria Santos"/><span><strong>Engr. Maria Santos</strong><small>Network Administrator · Primary</small><a href="mailto:msantos@bulsu.edu.ph">msantos@bulsu.edu.ph</a></span></div><div><Avatar name="Paolo Cruz"/><span><strong>Paolo Cruz</strong><small>CICT Staff · Secondary</small><a href="mailto:pcruz@bulsu.edu.ph">pcruz@bulsu.edu.ph</a></span></div></article>
+        <article className="card contacts-card"><div className="card-head"><div><h2>Escalation contacts</h2></div></div><div><Avatar name="Maria Santos"/><span><strong>Engr. Maria Santos</strong><small>Network Admin · Primary</small><a href="mailto:msantos@bulsu.edu.ph">msantos@bulsu.edu.ph</a></span></div><div><Avatar name="Paolo Cruz"/><span><strong>Paolo Cruz</strong><small>Tech Support · Secondary</small><a href="mailto:pcruz@bulsu.edu.ph">pcruz@bulsu.edu.ph</a></span></div></article>
       </aside>
     </section>
   </>;
@@ -672,10 +672,10 @@ function Reports({ role, onGenerated }: { role: Role; onGenerated: (type: Report
 }
 
 const users = [
-  ["Maria Santos", "Administrator", "Enabled", "Today, 08:11", "Active", "—"],
-  ["Paolo Cruz", "CICT Staff", "Enabled", "Today, 07:54", "Active", "—"],
-  ["Dr. Elena Reyes", "Director", "Enabled", "Yesterday, 16:20", "Active", "—", "dr.elena.reyes@bulsu.edu.ph"],
-  ["Luis Garcia", "IT Helpdesk", "Not enabled", "May 20, 10:14", "Active", "—"],
+  ["Maria Santos", "Network Admin", "Enabled", "Today, 08:11", "Active", "—"],
+  ["Paolo Cruz", "Tech Support", "Enabled", "Today, 07:54", "Active", "—"],
+  ["Dr. Elena Reyes", "Dean", "Enabled", "Yesterday, 16:20", "Active", "—", "dr.elena.reyes@bulsu.edu.ph"],
+  ["Luis Garcia", "Secretary", "Not enabled", "May 20, 10:14", "Active", "—"],
   ["Ana Mendoza", "Auditor", "Enabled", "May 18, 09:40", "Active", "—"],
   ["Jonas Ramos", "Intern", "Not enabled", "Today, 08:30", "Active", "Dec 18, 2026"],
 ];
@@ -693,7 +693,7 @@ function Users({ currentUser, onAudit }: { currentUser: string; onAudit: (row: A
   const openEdit = (index: number) => {
     const user = userRows[index];
     setSelectedIndex(index);
-    setForm({ name: user[0], email: user[6] ?? `${user[0].toLowerCase().replaceAll(" ", ".")}@bulsu.edu.ph`, role: user[1] === "Administrator" ? "Admin" : roles.find((role) => role.label === user[1])?.id ?? "Staff", status: user[4], expiry: "", twoFactor: user[2] === "Enabled" });
+    setForm({ name: user[0], email: user[6] ?? `${user[0].toLowerCase().replaceAll(" ", ".")}@bulsu.edu.ph`, role: user[1] === roles.find((role) => role.id === "Admin")?.label ? "Admin" : roles.find((role) => role.label === user[1])?.id ?? "Staff", status: user[4], expiry: "", twoFactor: user[2] === "Enabled" });
     setDialog("edit");
   };
   const saveUser = (event: FormEvent) => {
@@ -703,8 +703,9 @@ function Users({ currentUser, onAudit }: { currentUser: string; onAudit: (row: A
     setDialog(null);
   };
   // Only the network administrator reaches this page (Table 1). Guard the signed-in account and the last administrator so access cannot be lost.
+  const adminLabel = roles.find((role) => role.id === "Admin")?.label ?? "Network Admin";
   const deleteBlock = (index: number) => userRows[index][0] === currentUser ? "You cannot delete the account you are signed in with."
-    : userRows[index][1] === "Administrator" && userRows.filter((user) => user[1] === "Administrator").length < 2 ? "At least one administrator account must remain." : "";
+    : userRows[index][1] === adminLabel && userRows.filter((user) => user[1] === adminLabel).length < 2 ? "At least one administrator account must remain." : "";
   const deleteUser = () => {
     if (deleteIndex === null || deleteBlock(deleteIndex)) return;
     setUserRows((current) => current.filter((_, index) => index !== deleteIndex));
