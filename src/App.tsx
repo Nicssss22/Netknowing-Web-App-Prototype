@@ -1,6 +1,6 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
-type Role = "Network Admin" | "Technical Support" | "Dean" | "Secretary" | "Auditor" | "Intern";
+type Role = "Admin" | "Staff" | "Director" | "Helpdesk" | "Auditor" | "Intern";
 type Screen =
   | "login"
   | "dashboard"
@@ -16,10 +16,10 @@ type Screen =
   | "monitoring";
 
 const roles: { id: Role; label: string; short: string }[] = [
-  { id: "Network Admin", label: "Network Administrator", short: "Administrator" },
-  { id: "Technical Support", label: "CICT Staff", short: "Tech Support" },
-  { id: "Dean", label: "Management Viewer (Director)", short: "Dean" },
-  { id: "Secretary", label: "Secretary", short: "Secretary },
+  { id: "Admin", label: "Network Administrator", short: "Administrator" },
+  { id: "Staff", label: "CICT Staff", short: "CICT Staff" },
+  { id: "Director", label: "Management Viewer (Director)", short: "Director" },
+  { id: "Helpdesk", label: "IT Helpdesk", short: "Helpdesk" },
   { id: "Auditor", label: "Auditor", short: "Auditor" },
   { id: "Intern", label: "Intern", short: "Intern" },
 ];
