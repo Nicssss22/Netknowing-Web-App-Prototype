@@ -16,10 +16,10 @@ type Screen =
   | "monitoring";
 
 const roles: { id: Role; label: string; short: string }[] = [
-  { id: "Admin", label: "Network Administrator", short: "Administrator" },
-  { id: "Staff", label: "CICT Staff", short: "CICT Staff" },
-  { id: "Director", label: "Management Viewer (Director)", short: "Director" },
-  { id: "Helpdesk", label: "IT Helpdesk", short: "Helpdesk" },
+  { id: "Network Administrator", label: "Network Administrator", short: "Administrator" },
+  { id: "Tech Support", label: "CICT Staff", short: "Tech Support" },
+  { id: "Dean", label: "Management Viewer (Dean)", short: "Dean" },
+  { id: "Secretary", label: "Secretary", short: "Secretary" },
   { id: "Auditor", label: "Auditor", short: "Auditor" },
   { id: "Intern", label: "Intern", short: "Intern" },
 ];
