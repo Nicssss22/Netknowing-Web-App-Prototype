@@ -1,28 +1,34 @@
 import { useMemo, useState } from "react";
 
-type Role = "Admin" | "Staff" | "Director" | "Helpdesk" | "Auditor" | "Intern";
-type Screen = "login" | "dashboard" | "devices" | "history" | "reports" | "audit";
+type Role =
+  | "Network Administrator"
+  | "CICT Staff"
+  | "Management Viewer (Dean)"
+  | "IT Helpdesk"
+  | "Auditor"
+  | "Intern";
+
+type Screen = "dashboard" | "devices" | "history" | "reports" | "audit";
 
 const roles: { id: Role; label: string; short: string }[] = [
-  { id: "Admin", label: "Network Administrator", short: "Administrator" },
-  { id: "Staff", label: "CICT Staff", short: "Tech Support" },
-  { id: "Director", label: "Management Viewer (Dean)", short: "Dean" },
-  { id: "Helpdesk", label: "IT Helpdesk", short: "Helpdesk" },
+  { id: "Network Administrator", label: "Network Administrator", short: "Administrator" },
+  { id: "CICT Staff", label: "CICT Staff", short: "Tech Support" },
+  { id: "Management Viewer (Dean)", label: "Management Viewer (Dean)", short: "Dean" },
+  { id: "IT Helpdesk", label: "IT Helpdesk", short: "Helpdesk" },
   { id: "Auditor", label: "Auditor", short: "Auditor" },
   { id: "Intern", label: "Intern", short: "Intern" },
 ];
 
 const permissions: Record<Role, Screen[]> = {
-  Admin: ["dashboard", "devices", "history", "reports", "audit"],
-  Staff: ["dashboard", "devices", "history", "reports"],
-  Director: ["dashboard", "devices", "history", "reports"],
-  Helpdesk: ["dashboard", "devices", "history"],
+  "Network Administrator": ["dashboard", "devices", "history", "reports", "audit"],
+  "CICT Staff": ["dashboard", "devices", "history", "reports"],
+  "Management Viewer (Dean)": ["dashboard", "devices", "history", "reports"],
+  "IT Helpdesk": ["dashboard", "devices", "history"],
   Auditor: ["history", "reports", "audit"],
   Intern: ["dashboard", "devices"],
 };
 
-const screens: Record<Screen, string> = {
-  login: "Sign in",
+const screenLabels: Record<Screen, string> = {
   dashboard: "Network overview",
   devices: "Devices",
   history: "Incident history",
@@ -31,7 +37,7 @@ const screens: Record<Screen, string> = {
 };
 
 export default function App() {
-  const [role, setRole] = useState<Role>("Admin");
+  const [role, setRole] = useState<Role>("Network Administrator");
   const [screen, setScreen] = useState<Screen>("dashboard");
 
   const activeRole = useMemo(
@@ -44,49 +50,47 @@ export default function App() {
   return (
     <div style={{
       minHeight: "100vh",
-      background: "linear-gradient(135deg, #0f172a 0%, #1e293b 30%, #0b1020 100%)",
-      color: "#e2e8f0",
+      background: "linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)",
+      color: "#0f172a",
       fontFamily: "Inter, system-ui, sans-serif",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      padding: 24,
+      padding: 20,
     }}>
       <div style={{
-        width: "100%",
-        maxWidth: 1100,
-        background: "rgba(15, 23, 42, 0.85)",
-        border: "1px solid rgba(148, 163, 184, 0.25)",
-        borderRadius: 20,
-        boxShadow: "0 30px 80px rgba(15, 23, 42, 0.55)",
+        maxWidth: 1200,
+        margin: "0 auto",
+        background: "#ffffff",
+        borderRadius: 18,
+        border: "1px solid #dfe7f2",
+        boxShadow: "0 18px 40px rgba(15, 23, 42, 0.08)",
         overflow: "hidden",
       }}>
         <header style={{
           display: "flex",
-          alignItems: "center",
           justifyContent: "space-between",
-          padding: "16px 20px",
-          borderBottom: "1px solid rgba(148, 163, 184, 0.18)",
-          background: "rgba(15, 23, 42, 0.94)",
+          alignItems: "center",
+          gap: 16,
+          padding: "18px 24px",
+          background: "#0f172a",
+          color: "#f8fafc",
         }}>
           <div>
-            <div style={{ fontSize: 12, letterSpacing: 2, textTransform: "uppercase", color: "#7dd3fc" }}>
+            <div style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#7dd3fc" }}>
               Netknowing
             </div>
             <strong style={{ fontSize: 22 }}>CICT Network Operations</strong>
           </div>
 
-          <label style={{ display: "flex", alignItems: "center", gap: 10, color: "#cbd5e1" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 14 }}>
             <span>View as</span>
             <select
               value={role}
               onChange={(event) => setRole(event.target.value as Role)}
               style={{
-                background: "#0f172a",
+                background: "#111827",
                 color: "#f8fafc",
                 border: "1px solid #334155",
                 borderRadius: 8,
-                padding: "8px 12px",
+                padding: "8px 10px",
               }}
             >
               {roles.map((item) => (
@@ -100,11 +104,11 @@ export default function App() {
 
         <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", minHeight: 620 }}>
           <aside style={{
-            background: "rgba(15, 23, 42, 0.7)",
-            borderRight: "1px solid rgba(148, 163, 184, 0.18)",
+            background: "#f8fafc",
+            borderRight: "1px solid #e2e8f0",
             padding: 18,
           }}>
-            <div style={{ fontSize: 12, letterSpacing: 2, textTransform: "uppercase", color: "#94a3b8", marginBottom: 18 }}>
+            <div style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#64748b", marginBottom: 16 }}>
               Workspace
             </div>
             {availableScreens.map((item) => (
@@ -112,32 +116,33 @@ export default function App() {
                 key={item}
                 onClick={() => setScreen(item)}
                 style={{
-                  display: "block",
                   width: "100%",
                   textAlign: "left",
-                  background: screen === item ? "rgba(59, 130, 246, 0.2)" : "transparent",
-                  border: screen === item ? "1px solid rgba(96, 165, 250, 0.4)" : "1px solid transparent",
-                  color: screen === item ? "#f8fafc" : "#cbd5e1",
+                  border: "1px solid transparent",
                   borderRadius: 10,
+                  background: screen === item ? "#dbeafe" : "transparent",
+                  color: screen === item ? "#0f172a" : "#1e293b",
                   padding: "10px 12px",
                   marginBottom: 8,
                   cursor: "pointer",
-                  fontSize: 15,
+                  fontWeight: 600,
                 }}
               >
-                {screens[item]}
+                {screenLabels[item]}
               </button>
             ))}
           </aside>
 
           <main style={{ padding: 28 }}>
             <div style={{ marginBottom: 22 }}>
-              <div style={{ fontSize: 12, letterSpacing: 2, textTransform: "uppercase", color: "#7dd3fc" }}>
+              <div style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: "#2563eb", fontWeight: 700 }}>
                 {activeRole.label}
               </div>
-              <h1 style={{ margin: "6px 0 10px", fontSize: 36 }}>{screens[screen]}</h1>
-              <p style={{ margin: 0, color: "#cbd5e1", maxWidth: 700 }}>
-                Sample campus monitoring dashboard. This build is restored and rendering successfully.
+              <h1 style={{ margin: "8px 0 10px", fontSize: 36, letterSpacing: "-0.04em" }}>
+                {screenLabels[screen]}
+              </h1>
+              <p style={{ margin: 0, color: "#475569", maxWidth: 700 }}>
+                Netknowing prototype is loading correctly. This render confirms the app is mounted without a crash.
               </p>
             </div>
 
@@ -145,38 +150,35 @@ export default function App() {
               {[
                 ["Total devices", "48", "Across 3 network tiers"],
                 ["Up", "41", "Healthy status"],
-                ["Degraded", "5", "Requires review"],
+                ["Degraded", "5", "Needs review"],
                 ["Down", "2", "Critical intervention"],
               ].map(([label, value, detail]) => (
-                <div
-                  key={label}
-                  style={{
-                    background: "rgba(15, 23, 42, 0.7)",
-                    border: "1px solid rgba(148, 163, 184, 0.2)",
-                    borderRadius: 16,
-                    padding: 18,
-                  }}
-                >
-                  <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 10 }}>{label}</div>
-                  <div style={{ fontSize: 32, fontWeight: 700 }}>{value}</div>
-                  <small style={{ color: "#cbd5e1" }}>{detail}</small>
+                <div key={label} style={{
+                  background: "#f8fafc",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: 14,
+                  padding: 18,
+                }}>
+                  <div style={{ color: "#64748b", fontSize: 12, marginBottom: 10 }}>{label}</div>
+                  <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: "-0.04em" }}>{value}</div>
+                  <small style={{ color: "#475569" }}>{detail}</small>
                 </div>
               ))}
             </div>
 
             <div style={{
-              marginTop: 22,
-              background: "rgba(30, 41, 59, 0.8)",
-              border: "1px solid rgba(148, 163, 184, 0.2)",
-              borderRadius: 16,
-              padding: 20,
+              marginTop: 24,
+              background: "#f8fafc",
+              border: "1px solid #e2e8f0",
+              borderRadius: 14,
+              padding: 18,
             }}>
-              <div style={{ fontWeight: 700, marginBottom: 12 }}>Status</div>
-              <p style={{ margin: 0, color: "#cbd5e1" }}>
+              <div style={{ fontWeight: 700, marginBottom: 8 }}>Status</div>
+              <div style={{ color: "#334155" }}>
                 Role: <strong>{activeRole.label}</strong><br />
-                Screen: <strong>{screens[screen]}</strong><br />
-                App status: <strong style={{ color: "#86efac" }}>Running successfully</strong>
-              </p>
+                Screen: <strong>{screenLabels[screen]}</strong><br />
+                App status: <strong style={{ color: "#16a34a" }}>Running successfully</strong>
+              </div>
             </div>
           </main>
         </div>
